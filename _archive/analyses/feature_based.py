@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 
-from analyses.data_utils import PathEntry
+from common.data_utils import PathEntry
 
 from data.spikes import SpikeShape, SpikeShapes
 from analyses.preprocessing import prepare_data

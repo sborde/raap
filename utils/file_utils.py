@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from analyses.data_utils import CellWrapper, CellInfo
+from common.data_utils import CellWrapper, CellInfo
 
 def load_config(config_path: str) -> dict:
     """

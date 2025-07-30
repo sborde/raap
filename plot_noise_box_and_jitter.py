@@ -15,7 +15,7 @@ import seaborn as sns
 
 from utils.file_utils import load_config
 
-from analyses.data_utils import CellInfo, CellWrapper, CellPath
+from common.data_utils import CellInfo, CellWrapper, CellPath
 
 
 def parse_args():

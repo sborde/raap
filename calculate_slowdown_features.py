@@ -7,7 +7,7 @@ This is a blank-sheet rewrite of the run_analysis_on_files.py script.
 import argparse
 from pathlib import Path
 
-from analyses.data_utils import (
+from common.data_utils import (
     get_input_file_paths,
     load_config
 )

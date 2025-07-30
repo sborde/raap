@@ -33,8 +33,9 @@ output:
     category_averages: averages
     # - piechart: suffix for the spike type pie chart
     category_piechart: piechart
-    # - residuals: suffix for the residuals histogram
+    # - residual_histogram: suffix for the residual histogram
     residual_histogram: residuals
+    valley_time_deviation:  valleys
 # Analysis parameters
 analysis:
   # Spike shape extractor parameters
@@ -90,6 +91,7 @@ plot:
     category_averages: True
     category_piechart: True
     residual_histogram: True
+    valley_time_deviation: True
   scatter:
     # Figure size in inches
     axis_size: [5, 5]
@@ -103,7 +105,7 @@ plot:
   category_averages:
     # Size of one Axis on the figure, the full size will be calculated
     axis_size: [5, 2.5]
-    xlim: [-0.001, 0.002]
+    xlim: [-1, 2]
     # Plotting mode for the average shape
     #   raw: plot and average spikes as they are
     #   align: set each spike's start to 0
@@ -127,7 +129,16 @@ plot:
     # Number of bins for the histogram
     bins: 100
     # Histogram limits
-    limits: [-0.01, 0.01]
+    limits: [0, 100]
+    # Color of the histogram
+    color: '#adadad'
+  valley_time_deviation:
+    # Size of the axis
+    axis_size: [5, 5]
+    # Number of bins for the histogram
+    bins: 100
+    # Histogram limits
+    limits: [-1, 0]
     # Color of the histogram
     color: '#adadad'
   palette:

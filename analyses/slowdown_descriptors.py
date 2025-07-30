@@ -7,7 +7,7 @@ from scipy.signal import savgol_filter, find_peaks
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from analyses.data_utils import PathEntry
+from common.data_utils import PathEntry
 from data.spikes import SpikeShape, load_spike_shapes
 
 FEATURE_PROPERTIES = [

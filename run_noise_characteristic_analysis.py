@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from scipy.signal import savgol_filter
 
-from analyses.data_utils import CellWrapper, load_config
+from common.data_utils import CellWrapper, load_config
 from analyses.slowdown_analysis import analyze_noise_characteristics
 from data.spikes import SpikeShapes
 from utils.file_utils import enumerate_input_files

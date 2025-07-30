@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 import yaml
 
-from analyses.data_utils import get_input_file_paths
+from common.data_utils import get_input_file_paths
 from _archive.analyses.feature_based import plot_grouped_by_rising_phase_features
 
 if __name__ == '__main__':

@@ -7,7 +7,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
-from analyses.data_utils import GroupWrapper
+from common.data_utils import GroupWrapper
 from data.spikes import SpikePhase, SpikeShape
 
 class PlottableSpike(Protocol):

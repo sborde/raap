@@ -13,7 +13,7 @@ import seaborn as sns
 
 from scipy.signal import savgol_filter
 
-from analyses.data_utils import CellWrapper, GroupInfo, GroupWrapper
+from common.data_utils import CellWrapper, GroupInfo, GroupWrapper
 from analyses.slowdown_descriptors import (
     calculate_rising_features,
     calculate_sparse_2d_histogram,
@@ -83,8 +83,6 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
     cell_features = describe_spikes(cell_spikes, config['analysis']['descriptor'])
     # Categorize spikes
     cell_features = categorize_spikes(cell_features, config['analysis']['classification'])
-    # Estimate noise and SNR
-    cell_snr = calculate_snr_from_residuals(cell_spikes, config['analysis']['descriptor']['smooth'])
 
     # Save features
     output_path = (
@@ -94,16 +92,17 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
     )
     output_path.mkdir(parents=True, exist_ok=True)
     cell_features.data.to_csv(output_path / f'{cell_path.name}.csv', index=False)
-    cell_snr.data.to_csv(output_path / f'{cell_path.name}_snr.csv', index=False)
 
     # Do plots
     suffixes = config['output']['suffixes']
     cell_type_color = config['plot']['palette'][cell_features.cell_type]
 
     if config['plot']['selector']['residual_histogram']:
-        # Create histogram of residuals
-        residual_histogram_config = config['plot']['residual_histogram']
-        cell_figure = create_snr_histogram(cell_snr, residual_histogram_config)
+        # Create histogram of noise powers
+        cell_figure = create_residual_histogram(
+            cell_features,
+            config['plot']['residual_histogram']
+        )
         figure_path = save_figure(cell_figure, suffixes['residual_histogram'], config['output'])
         cell_results['images'].append({
             'path': figure_path,
@@ -170,6 +169,19 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
             'path': figure_path,
             'type': 'category_averages'
         })
+
+    if config['plot']['selector']['valley_time_deviation']:
+        # Create histogram of valley times
+        cell_figure = create_valley_time_deviation_histogram(
+            cell_features,
+            config['plot']['valley_time_deviation']
+        )
+        figure_path = save_figure(cell_figure, suffixes['valley_time_deviation'], config['output'])
+        cell_results['images'].append({
+            'path': figure_path,
+            'type': 'valley_time_deviation'
+        })
+
 
     return cell_results
 
@@ -365,34 +377,57 @@ def create_spike_type_piechart(
     ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
     return CellWrapper[Figure](features.info, fig)
 
-def create_snr_histogram(
-    noise_estimate: CellWrapper[pd.DataFrame],
+def create_valley_time_deviation_histogram(
+    features: CellWrapper[pd.DataFrame],
     config: dict
 ) -> CellWrapper[Figure]:
     """
-    Create a histogram of the residuals of the spike shapes.
+    Create a histogram of the valley time deviations.
     """
-    snrs = noise_estimate.data['snr']
-    snr_median = np.median(snrs)
-    snr_q1 = np.percentile(snrs, 25)
-    snr_q3 = np.percentile(snrs, 75)
-
+    valley_times = features.data['valley_t'] * 1000
     fig, ax = plt.subplots(figsize=tuple(config['axis_size']))
     ax.hist(
-        snrs,
+        valley_times,
         bins=config['bins'],
         range=config['limits'],
         color=config['color'],
         alpha=0.7
     )
-    ax.set_xlabel('SNR (dB)')
+    ax.set_xlabel('Valley time (ms)')
+    ax.set_title(f'{features.name} Valley Time Histogram')
+
+    return CellWrapper[Figure](features.info, fig)
+
+def create_residual_histogram(
+    features: CellWrapper[pd.DataFrame],
+    config: dict
+) -> CellWrapper[Figure]:
+    """
+    Create a histogram of the residuals of the spike shapes.
+    """
+    noise_power = features.data['noise_power']
+    raw_power = features.data['raw_power']
+    noise_ratio = (noise_power / raw_power) * 100
+    noise_median = np.median(noise_ratio)
+    noise_q1 = np.percentile(noise_ratio, 25)
+    noise_q3 = np.percentile(noise_ratio, 75)
+
+    fig, ax = plt.subplots(figsize=tuple(config['axis_size']))
+    ax.hist(
+        noise_ratio,
+        bins=config['bins'],
+        range=config['limits'],
+        color=config['color'],
+        alpha=0.7
+    )
+    ax.set_xlabel('Residual-Raw power ratio (%)')
     ax.set_title(
-        f'{noise_estimate.name}\n' +
-        f'SNR median: {snr_median:.2f} dB' +
-        f'Q1-Q3: {snr_q1:.2f}-{snr_q3:.2f} dB'
+        f'{features.name}\n' +
+        f'Noise ratio median: {noise_median:.2f} %' +
+        f'Q1-Q3: {noise_q1:.2f}-{noise_q3:.2f} %'
     )
 
-    return CellWrapper[Figure](noise_estimate.info, fig)
+    return CellWrapper[Figure](features.info, fig)
 
 def form_group(
     spike_shapes: CellWrapper[SpikeShapes],

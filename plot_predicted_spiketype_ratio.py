@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import yaml
 
-from analyses.data_utils import CellInfo, CellWrapper
+from common.data_utils import CellInfo, CellWrapper
 
 def load_config(config_path: str) -> dict:
     """

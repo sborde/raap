@@ -8,7 +8,7 @@ from pathlib import Path
 
 from analyses.shape_based import project_to_umap
 from analyses.feature_based import calculate_spike_rising_phase_features
-from analyses.data_utils import get_input_file_paths
+from common.data_utils import get_input_file_paths
 
 
 if __name__ == '__main__':

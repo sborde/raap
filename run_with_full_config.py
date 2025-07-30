@@ -13,14 +13,14 @@ if __name__ == "__main__":
         description='Run full slowdown analysis on dataset.'
     )
     parser.add_argument(
-        'config',
+        'command',
         type=str,
         help='Path to the analysis configuration file.'
     )
     args = parser.parse_args()
 
-    with open(f"{args.config}.yaml", 'r') as file:
+    with open(f"{args.command}.yaml", 'r') as file:
         # Load the configuration file
         full_config = yaml.safe_load(file)
 
-    ROUTING[args.config](full_config)
+    ROUTING[args.command](full_config)

@@ -13,10 +13,28 @@ Versions:
 """
 
 import json
+from typing import Callable
 from pathlib import Path
 
 from analyses.slowdown_analysis import analyze_cell
 from utils.file_utils import enumerate_input_files
+from utils.report_generators import compose_textfile
+
+def generate_report(
+    figure_dicts: list[dict],
+    text_composer: Callable[[str], None]
+) -> None:
+    """
+    Generate a report for the analysis result figures as a HTML file.
+    """
+    json_string = json.dumps(
+        figure_dicts,
+        indent=4,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(',', ': ')
+    )
+    text_composer(json_string)
 
 def run_slowdown_analysis(config: dict) -> None:
     """
@@ -26,26 +44,26 @@ def run_slowdown_analysis(config: dict) -> None:
     Args:
         config (dict): Configuration dictionary for the analysis.
     """
-    cell_paths = enumerate_input_files(config)
 
-    cell_results = []
-    for i, cell_path in enumerate(cell_paths):
-        print(f"Processing file {i+1}/{len(cell_paths)}: {cell_path.name}")
-        cell_results.append(analyze_cell(cell_path, config))
+    template_path = Path('html_templates') / 'index.html'
+    report_path = Path(config['output']['path']) / 'index_pooled.html'
 
-        json_string = json.dumps(
-            cell_results,
-            indent=4,
-            sort_keys=True,
-            ensure_ascii=False,
-            separators=(',', ': ')
-        )
+    def report_composer(json_string: str) -> None:
+        """
+        Generates a report from the JSON string.
+        """
+        replacements = {'result_list': json_string}
+        compose_textfile(template_path, replacements, report_path)
 
-        # Create or update the HTML browser.
-        result_root = Path(config['output']['path'])
-        html_path = result_root / 'index.html'
-        with open('html_templates/index.html', 'r') as template_file:
-            html_content = template_file.read()
-        html_content = html_content.replace('[[cells_json]]', json_string)
-        with open(html_path, 'w') as html_file:
-            html_file.write(html_content)
+    def report_generator(figure_dicts: list[dict]) -> None:
+        """
+        Generates a report from the figure dictionaries.
+        """
+        generate_report(figure_dicts, report_composer)
+
+    cells = enumerate_input_files(config)
+    results = []
+    for i, cell in enumerate(cells):
+        print(f"Processing file {i+1}/{len(cells)}: {cell.name}")
+        results.append(analyze_cell(cell, config))
+        report_generator(results)
