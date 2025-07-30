@@ -1,0 +1,9 @@
+base_path: E:/Data/BogiSejtek/PutRAAP/20250701/juxta
+# base_path: E:/Data/BogiSejtek/PutRAAP
+mode: all
+# mode: multi_file
+# files:
+#   # - path: juxta
+#   #   name: 2406282PZ_01_juxtaAISAP.mat
+#   - path: RSI_L2-3
+#     name: B18_d3t1c1_270-820.mat

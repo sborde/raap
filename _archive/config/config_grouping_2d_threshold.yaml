@@ -1,0 +1,28 @@
+output_dir: 'E:/Data/BogiSejtek/PutRAAP/Results/GroupedMeanShapes/20250616/InVivoJuxta/'
+group_features:
+  - relative_dv_drop
+  - relative_rebound_time
+group_list:
+  - name: 'AIS-AP'
+    color: '#BF7D2D'
+    limits:
+      relative_dv_drop:
+        up: 0
+      relative_rebound_time:
+        up: 0
+  - name: 'UNK-AP'
+    color: '#333333'
+    limits:
+      relative_dv_drop:
+        low: 0
+        up: 0.05
+      relative_rebound_time:
+        low: 0
+        up: 0.05
+  - name: 'RA-AP'
+    color: '#62B297'
+    limits:
+      relative_dv_drop:
+        low: 0.05
+      relative_rebound_time:
+        low: 0.05

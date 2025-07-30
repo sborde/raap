@@ -1,0 +1,9 @@
+base_path: E:/Data/BogiSejtek/PutRAAP/
+mode: multi_dir
+dirs:
+  # - PYR_L2-3
+  # - PYR_L4-6
+  - RSI_L2-3
+  - RSI_L4-6
+  - FSI_L2-3
+  - FSI_L4-6

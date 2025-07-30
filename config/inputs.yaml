@@ -1,0 +1,12 @@
+base_path: E:/Data/BogiSejtek/PutRAAP
+files:
+  - path: PYR_L4-6
+    name: B11_d4t1c4_sev.mat
+  - path: PYR_L2-3
+    name: B32_d3t1c2.mat
+  - path: PYR_L2-3
+    name: Rat_121d1t1c2_PYR_V.mat
+  - path: RSI_L2-3
+    name: B41_d1t1c1.mat
+  - path: RSI_L2-3
+    name: B18_d3t1c1_270-820.mat

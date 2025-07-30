@@ -1,0 +1,6 @@
+output_dir: 'E:/Data/BogiSejtek/PutRAAP/Results/20250611/UmapProjection'
+umap:
+  n_components: 2
+  min_dist: 0.5
+  n_neighbors: 30
+  metric: 'euclidean'

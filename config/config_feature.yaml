@@ -1,0 +1,4 @@
+output_dir: 'C:/tmp/Bozso2025/PutRAAP/Results/RisingPhaseFeatures/20250614/InVivoJuxta/'
+debug: True
+plot_mode: 'slowdown_sorted'
+search_mode: 'rising10'

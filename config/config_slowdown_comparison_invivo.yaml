@@ -1,0 +1,10 @@
+input_dir: E:/Data/BogiSejtek/PutRAAP/Results/RisingPhaseFeatures/20250613/InVivoJuxta/Smooth_w5_p3/Results
+output_dir: E:/Data/BogiSejtek/PutRAAP/Results/RisingPhaseFeatures/20250613/InVivoJuxta/Smooth_w5_p3/Figures
+group_list:
+  # - RSI_L2-3
+  # - RSI_L4-6
+  # - PYR_L2-3
+  # - PYR_L4-6
+  - FSI_L2-3
+  - FSI_L4-6
+skip_files: None

@@ -1,0 +1,13 @@
+extractor:
+  signal_name: wideband
+  event_name: spk
+  cut_window: [-0.001, 0.002]
+  fs: 40000
+preprocess:
+  normalize: start_to_peak
+  shape_part: half
+  sg_filter:
+    window_length: 5
+    poly_order: 3
+
+

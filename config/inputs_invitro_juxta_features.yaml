@@ -1,0 +1,7 @@
+base_path: E:/Data/BogiSejtek/PutRAAP/Results/20250701/InVitroJuxta/DvMaxNorm/w11_p3/Preprocessed
+dataset_name: invitro_juxta
+mode: all
+skip:
+  - 2406272PZ_01_features.csv
+  - 2407032SI_GR1_features.csv
+  - 2406242PZ_03_features.csv

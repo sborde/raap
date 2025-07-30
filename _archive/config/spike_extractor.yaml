@@ -1,0 +1,7 @@
+extractor:
+  signal_name: wideband
+  event_name: spk
+  cut_window: [-0.001, 0.002]
+  fs: 40000
+output_dir: 'E:/Data/BogiSejtek/PutRAAP/Results/20250611/DeviationFromMedian'
+

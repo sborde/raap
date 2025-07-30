@@ -1,0 +1,6 @@
+input_dir: E:/Data/BogiSejtek/PutRAAP/Results/20250612/RisingPhaseFeatures/InVitroJuxtaSorted/Results
+output_dir: E:/Data/BogiSejtek/PutRAAP/Results/RisingPhaseFeatures/20250616/InVitroJuxtaSorted/Figures
+group_list: None
+skip_files:
+  - 2407032PZ_01
+  - 2406242PZ_03

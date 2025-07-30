@@ -1,0 +1,4 @@
+base_path: E:/Data/BogiSejtek/PutRAAP/Results/20250703/InVivoJuxta/DvMaxNorm/Search_0.15-0.85/w5_p3/Preprocessed
+dataset_name: invivo_juxta
+mode: all
+skip:

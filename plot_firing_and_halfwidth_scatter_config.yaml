@@ -1,0 +1,39 @@
+input:
+  # Path of the input table
+  path: E:\Data\BogiSejtek\PutRAAP\20250721\Data\firing_frequency.xlsx
+# Ouptput parameters
+output:
+  # Path to the output directory
+  path: E:\Data\BogiSejtek\PutRAAP\20250721\Figures
+  # Name of the output file
+  name: firing_halfwidth_scatter
+  # PNG is automatically created, SVG is optional
+  do_svg: True
+  # dpi of the output PNG
+  dpi: 100
+# Analysis parameters
+plot:
+  # Figure size in inches
+  axis_size: [10, 10]
+  # Point size
+  point_sizes: 100
+  # Axis limits
+  axis_params:
+    limits:
+      x: [0.0, 0.8]
+      y: [0.01, 100]
+    log_scale:
+      x: False
+      y: True
+markers:
+  shapes:
+    PYR: '^'
+    RSI: 'd'
+    FSI: 'o'
+  colors:
+    PYR_L2-3: '#803300ff'
+    PYR_L4-6: '#502d16ff'
+    RSI_L2-3: '#ff48a3ff'
+    RSI_L4-6: '#800080ff'
+    FSI_L2-3: '#d54500ff'
+    FSI_L4-6: '#7a0000ff'

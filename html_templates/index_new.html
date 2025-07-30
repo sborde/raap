@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>My Web Page</title>
+    <style type="text/css">
+        body {
+            background-color: #f4f4f4;
+        }
+        h1 {
+            font-size: 36px;
+            color: #333;
+            margin-top: 20px;
+        }
+        h2 {
+            font-size: 24px;
+            color: #333;
+        }
+        #container {
+            background-color: #ffffff;
+        }
+        header {
+            width: 100%;
+        }
+        main {
+            display: flex;
+            flex-direction: row;
+        }
+        nav {
+            width: 15%;
+            border-right: 2px solid black;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        ul li {
+            padding: 10px;
+            cursor: pointer;
+            color: #000000;
+        }
+        ul#groups li {
+            font-size: 18px;
+        }
+        ul li:hover {
+            background-color: #e0e0e0;
+        }
+        ul li.active-group {
+            color: #2e2edf;
+            font-weight: bold;
+        }
+        ul li.active-cell {
+            color: #2e2edf;
+            font-weight: bold;
+        }
+        article {
+            width: 85%;
+            display: flex;
+            flex-direction: column
+        }
+        article #subtitle {
+            width: 100%;
+            margin-top: 20px;
+        }
+        article #images {
+            width: 100%;
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+        }
+        article img {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+    <script type="text/javascript">
+        // JavaScript code to dynamically populate the cell list and handle interactions
+        const json_data = `[[result_list]]`;
+
+        let currentCell = null;
+        let currentGroup = null;
+
+        function loadCell(cell) {
+            let article_item = document.querySelector('article');
+
+            while (article_item.firstChild) {
+                article_item.removeChild(article_item.firstChild);
+            }
+            let subtitle_div = document.createElement('div');
+            let images_div = document.createElement('div');
+            let subtitle = document.createElement('h2');
+
+            subtitle_div.id = 'subtitle';
+            subtitle.textContent = `${cell.name} - ${cell.type}`;
+            subtitle_div.appendChild(subtitle);
+            article_item.appendChild(subtitle_div);
+            article_item.appendChild(images_div);
+
+            cell.images.forEach(element => {
+                let image = document.createElement('img');
+                image.src = element;
+                images_div.appendChild(image);
+            });
+
+        }
+
+        function loadGroup(group) {
+            const cellList = document.createElement('ul');
+            currentGroup.appendChild(cellList);
+
+            group.results.forEach(cell => {
+                const li = document.createElement('li');
+                li.textContent = `${cell.name} - ${cell.type}`;
+                li.addEventListener('click', () => {
+
+                    if (currentCell) {
+                        currentCell.classList.remove('active-cell');
+                    }
+                    li.classList.add('active-cell');
+                    currentCell = li;
+                    loadCell(cell);
+                });
+                cellList.appendChild(li);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const groupList = document.getElementById('groups');
+            const groups = JSON.parse(json_data);
+            groups.forEach(group => {
+                const li = document.createElement('li');
+                li.textContent = group.name;
+                li.addEventListener('click', () => {
+
+                    if (currentGroup) {
+                        if (currentGroup == li) {
+                            return; // Do not reload the same group
+                        }
+                        currentGroup.classList.remove('active-group');
+                        cellList = currentGroup.querySelector('ul');
+                        if (cellList) {
+                            currentGroup.removeChild(cellList);
+                        }
+                    }
+                    li.classList.add('active-group');
+                    currentGroup = li;
+                    loadGroup(group);
+                });
+                groupList.appendChild(li);
+            });
+        });
+    </script>
+</head>
+<body>
+    <div id="container">
+        <header>
+            <h1>Result browser</h1>
+        </header>
+        <main>
+            <nav>
+                <h2>Groups</h2>
+                <ul id="groups"></ul>
+            </nav>
+            <article>
+                <h2>Select a cell from the list</h2>
+            </article>
+        </main>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,40 @@
+output_dir: 'E:/Data/BogiSejtek/PutRAAP/Results/20250703/InVivoJuxta/DvMaxNorm/Search_0.15-0.85/w5_p3'
+measurement_type: invivo_juxta
+output_format:
+  - png
+  - svg
+# How to visualize multiple inputs
+# - pooled: treat all inputs as one dataset
+# - celltype: pool by cell type
+# - individual: visualize each input separately
+run_mode: celltype
+# Threshold above which an AP is considered as RAAP
+thresholds:
+  x: 0.01
+  y: 0.24
+axis_limits:
+  x:
+    - 0.0
+    - 0.6
+  y:
+    - 0.0
+    - 0.8
+modes:
+  avgshape: True # average shape grouped by above threshold, zero and between
+  # Different ways to show the AP distribuion in the feature space
+  distscatter: True # scatter histogram
+  tileplot: False # heatmap
+  contour: False # contour plot
+# How to determine the colors of the APs
+# - cell_type: color all AP by cell type
+# - spike_type: color APs by the known spike type (only at in vitro mode)
+coloring: cell_type
+palette:
+  RAAP: '#ff5000'
+  AISAP: '#0000ff'
+  PYR_L2-3: '#803300ff'
+  PYR_L4-6: '#502d16ff'
+  RSI_L2-3: '#ff48a3ff'
+  RSI_L4-6: '#800080ff'
+  FSI_L2-3: '#d54500ff'
+  FSI_L4-6: '#7a0000ff'

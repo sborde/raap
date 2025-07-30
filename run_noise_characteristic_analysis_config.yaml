@@ -1,0 +1,51 @@
+input:
+  # Type of the input
+  #  - recursive: recursively processes all files in each subdirectory
+  #  - directory: processes all files found in the given directory
+  #  - file: processes a single file of the given path
+  mode: directory
+  # Path of the input dir or the file (in case of type=file)
+  path: E:\Data\BogiSejtek\PutRAAP\RSI_L2-3
+  # List of files to skip, leave empty if you want all files
+  skip_files:
+    # - file1.mat
+    # - file2.mat
+  # List of directories to skip, leave empty if you want all directories
+  skip_dirs:
+    # - dir1
+    # - dir2
+# Ouptput parameters
+output:
+  # Path to the output directory
+  path: E:\tmp\RaAp_new\NoiseProperties
+  # List of output formats
+  # - png: save figures as PNG files
+  # - svg: save figures as SVG files
+  formats:
+    - png
+  # dpi of the output png (if png is set)
+  dpi: 100
+# Analysis parameters
+analysis:
+  # Spike shape extractor parameters
+  extractor:
+    # name of the signal
+    signal_name: wideband
+    # name of the event marker
+    event_name: spk
+    # time window to cut the spikes
+    cut_window: [-0.001, 0.002]
+    # target sampling frequency
+    fs: 40000
+  smooth:
+    window_length: 5
+    polyorder: 3
+plot:
+  # Size of the axis in inches (width, height)
+  axis_size: [5, 5]
+  # Number of bins for the histogram
+  bins: 100
+  # Histogram limits
+  # limits: [20, 80]
+  # Color of the histogram
+  color: '#adadad'

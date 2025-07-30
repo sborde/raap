@@ -1,0 +1,7 @@
+base_path: E:/Data/BogiSejtek/PutRAAP
+mode: multi_file
+files:
+  - path: FSI_L2-3
+    name: J47_d2t1c4.mat
+  - path: FSI_L4-6
+    name: Rat188_d3t1c4.mat

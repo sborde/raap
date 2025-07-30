@@ -1,0 +1,79 @@
+"""Utility functions for file system operations."""
+
+from pathlib import Path
+
+import yaml
+
+from analyses.data_utils import CellWrapper, CellInfo
+
+def load_config(config_path: str) -> dict:
+    """
+    Load the configuration from the specified path.
+    Args:
+        config_path (str): Path to the configuration file.
+    Returns:
+        dict: Loaded configuration dictionary.
+    """
+    with open(config_path, 'r', encoding='utf-8') as file:
+        return yaml.safe_load(file)
+
+def enumerate_input_files(config: dict) -> list[CellWrapper[Path]]:
+    """
+    Enumerate input files based on the configuration.
+    Args:
+        config (dict): Configuration dictionary.
+    Returns:
+        list[Path]: List of input file paths.
+    """
+
+    if 'input' not in config:
+        raise ValueError('Input configuration is missing in the config.')
+    if 'mode' not in config['input']:
+        raise ValueError('Input mode is not specified in the config.')
+    if 'path' not in config['input']:
+        raise ValueError('Input path is not specified in the config.')
+
+    skip_files = set(config['input'].get('skip_files', []) or [])
+    skip_dirs = set(config['input'].get('skip_dirs', []) or [])
+
+    input_mode = config['input']['mode']
+    input_path = Path(config['input']['path'])
+
+    if input_mode == 'file':
+        if not input_path.is_file():
+            raise ValueError(f"Input path {input_path} is not a file.")
+        return [
+            CellWrapper[Path](
+                CellInfo(
+                    input_path.stem,
+                    input_path.parent.name
+                ),
+                input_path
+            )
+        ]
+
+    if input_mode == 'directory':
+        dir_list = [input_path]
+    elif input_mode == 'recursive':
+        dir_list = [
+            sub_dir for sub_dir in input_path.rglob('*')
+            if sub_dir.is_dir()
+        ]
+    else:
+        raise ValueError(f"Unknown input type: {input_mode}")
+
+    return [
+        CellWrapper[Path](
+            CellInfo(
+                file_path.stem,
+                file_path.parent.name
+            ),
+            file_path
+        ) for dir_path in dir_list
+        for file_path in dir_path.glob('*.mat')
+        if (
+            file_path.is_file()
+            and dir_path.name not in skip_dirs
+            and file_path.name not in skip_files
+        )
+    ]

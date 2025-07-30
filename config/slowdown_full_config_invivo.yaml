@@ -1,0 +1,44 @@
+output_dir: 'E:/Data/BogiSejtek/PutRAAP/Results/20250703/InVivoJuxta/DvMaxNorm/Search_0.15-0.85'
+measurement_type: invivo_juxta
+extractor:
+  signal_name: wideband
+  event_name: spk
+  cut_window: [-0.001, 0.002]
+  fs: 40000
+coloring: cell_type
+palette:
+  RAAP: '#ff5000'
+  AISAP: '#0000ff'
+  PYR_L2-3: '#803300ff'
+  PYR_L4-6: '#502d16ff'
+  RSI_L2-3: '#ff48a3ff'
+  RSI_L4-6: '#800080ff'
+  FSI_L2-3: '#d54500ff'
+  FSI_L4-6: '#7a0000ff'
+descriptor:
+  single_spike_images:
+    do: True # do we want to plot single spikes
+    dpi: 72 # dpi for single spike images
+    skip_zero: True # skip spikes with feature values (0, 0)
+  # parameters for savgol filter, leave empty to disable
+  smooth:
+    window_length: 5
+    polyorder: 3
+  # smooth: 
+  # max dV proportion for start detection
+  start_threshold: 0.1
+  # description interval mode
+  search_start:
+    # mode: 'start'
+    mode: 'time'
+    param:
+      threshold: 0.15
+    # mode: 'amplitude'
+    # param:
+    #   threshold: 0.1
+  search_end:
+    # mode: 'peak'
+    mode: 'time'
+    param:
+      threshold: 0.15
+    # mode: 'dv_max'
