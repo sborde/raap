@@ -3,7 +3,7 @@ This module contains the classes for representing spike likes, spike shapes,
 and spike rising parts.
 """
 import abc
-from typing import Self
+from typing import Callable, Self
 from pathlib import Path
 
 import numpy as np
@@ -12,6 +12,8 @@ from scipy.signal import savgol_filter
 
 from data.series import SegmentMatrix, DataSeries, SeriesMatrix
 from signalizer.model.experiment.recordings import MatRecording
+from signalizer.model.experiment.sequences import EventVector
+from signalizer.model.wrappers import InstanceMatrix
 from signalizer.processing.extractors import EventRelatedSegmentExtractor
 from signalizer.processing.factories import ProcessingSequence
 from signalizer.processing.retrievers import SignalRetriever, EventRetriever
@@ -487,6 +489,28 @@ class SpikePhases:
         return self._series[index]
 
 
+def create_segment_extractor(
+        signal_name: str,
+        event_name: str,
+        cut_window,
+        fs: int
+) -> EventRelatedSegmentExtractor:
+    return EventRelatedSegmentExtractor(
+        SignalRetriever(signal_name, ProcessingSequence([Resampler(fs)])),
+        EventRetriever(event_name),
+        EventRelatedSegmentCutter(TimeInterval(Interval.as_interval(cut_window)))
+    )
+
+def convert_to_spike_shapes(
+    segments
+) -> SpikeShapes:
+    return SpikeShapes(
+        segments.data.times,
+        segments.data.signals.as_matrix(),
+        np.array([event.timestamp.time for event in segments.reference]),
+        segments.data.signals.si
+    )
+
 def extract_triggered_segments(
         recording: MatRecording,
         signal_name: str,
@@ -495,7 +519,8 @@ def extract_triggered_segments(
         fs: int
 ) -> SpikeShapes:
     """
-    Extracts the spikes from the recording.
+    Extracts the spikes from the recording and converts into SpikeShapes.
+    This is a combined factory and adapter function for spike extraction.
     """
 
     spikes = EventRelatedSegmentExtractor(
@@ -515,3 +540,19 @@ def load_spike_shapes(input_path: Path, config: dict) -> SpikeShapes:
     """Load spike shapes from a recording file."""
     recording = MatRecording(input_path)
     return extract_triggered_segments(recording, **config)
+
+class SpikeShapeLoader:
+    """Class to load spike shapes from a recording file."""
+    def __init__(self, config: dict):
+        self._extractor = create_segment_extractor(
+            config['signal_name'],
+            config['event_name'],
+            config['cut_window'],
+            config['fs']
+        )
+
+    def __call__(self, path: Path) -> SpikeShapes:
+        """Load spike shapes using the configured extractor."""
+        return convert_to_spike_shapes(
+            self._extractor.extract(MatRecording(path))
+        )

@@ -8,9 +8,9 @@ import argparse
 from pathlib import Path
 
 from common.data_utils import (
-    get_input_file_paths,
-    load_config
+    get_input_file_paths
 )
+from common.run_utils import load_config
 from analyses.slowdown_descriptors import describe_spikes_per_cell
 
 def prepare_output_dir(config: dict) -> dict:

@@ -13,9 +13,9 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import seaborn as sns
 
-from utils.file_utils import load_config
+from common.run_utils import load_config
 
-from common.data_utils import CellInfo, CellWrapper, CellPath
+from common.wrappers import CellInfo, CellWrapper, CellPath
 
 
 def parse_args():
@@ -41,14 +41,13 @@ def wrap_path(path: Path, suffix: str) -> CellPath:
     Returns:
         CellWrapper[pd.DataFrame]: Wrapper containing cell information and an empty DataFrame.
     """
-    info = CellInfo(path.stem.replace(suffix, ''), path.parent.name)
-    return CellPath(info, path)
+    return CellPath(path, path.stem.replace(suffix, ''), path.parent.name)
 
 def load_noise_properties(path: CellPath) -> CellWrapper[pd.DataFrame]:
     """
     Load noise properties from a CSV file.
     Args:
-        path (CellWrapper[Path]): Wrapper containing cell
+        path (CellPath): Wrapper containing cell
         information and path to the CSV file.
     Returns:
         CellWrapper[pd.DataFrame]: Wrapper containing cell information and data.

@@ -1,11 +1,33 @@
 
 
 import abc
+import numpy as np
 from typing import Protocol, Optional
+from analyses.slowdown_descriptors import find_start_index
 from data.spikes import SpikeShape
 
-from analyses.slowdown_descriptors import align_spike_to_zero
+def align_spike_to_zero(spike: SpikeShape, params: dict) -> SpikeShape:
+    """
+    Align the spike to zero time.
+    The spike is shifted so that the peak is at zero time.
+    """
+    spike_peak_index = np.argmin(np.abs(spike.times - 0)).astype(int)
+    start_i = find_start_index(spike.values[:spike_peak_index + 1], params)
 
+    # if the start cannot be detected, return None
+    if start_i is None:
+        raise ValueError(
+            f'Spike {spike.timestamp} start can\'t be detected.'
+        )
+
+    start_v = spike.values[start_i]
+
+    return SpikeShape(
+        spike.times,
+        spike.values - start_v,
+        spike.timestamp,
+        spike.dt
+    )
 
 class SpikeTransformer(Protocol):
     """A protocol for spike transformers."""

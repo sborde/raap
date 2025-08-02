@@ -13,7 +13,8 @@ import seaborn as sns
 
 from scipy.signal import savgol_filter
 
-from common.data_utils import CellWrapper, GroupInfo, GroupWrapper
+from common.wrappers import CellPath, CellWrapper
+from common.data_utils import GroupInfo, GroupWrapper
 from analyses.slowdown_descriptors import (
     calculate_rising_features,
     calculate_sparse_2d_histogram,
@@ -25,12 +26,12 @@ from processors.spike_transformers import create_transformer
 from visualization.spikeshapes import plot_grouped_spikes
 
 def analyze_noise_characteristics(
-    cell_path: CellWrapper[Path],
+    cell_path: CellPath,
     config: dict
 ) -> CellWrapper[pd.DataFrame]:
     """Analyze the noise characteristics of the spikes in a cell.
     Args:
-        cell_path (CellWrapper[Path]): The path to the cell data.
+        cell_path (CellPath): The path to the cell data.
         config (dict): Configuration dictionary containing smoothing parameters.
     Returns:
         CellWrapper[pd.DataFrame]: A DataFrame containing the noise characteristics.
@@ -68,7 +69,7 @@ def analyze_noise_characteristics(
 
     return cell_noise_properties
 
-def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
+def analyze_cell(cell_path: CellPath, config: dict) -> dict:
     """Describe spikes for a cell spread across multiple files."""
 
     cell_results = {
@@ -211,17 +212,17 @@ def save_figure(
     return str(figure_dir / f'{file_name}.png').replace('\\', '/')
 
 def load_spikes(
-    cell_path: CellWrapper[Path],
+    cell_path: CellPath,
     config: dict
 ) -> CellWrapper[SpikeShapes]:
     """Load spikes from the given cell path using the specified extractor.
     Args:
-        cell_path (CellWrapper[Path]): The path to the cell data.
+        cell_path (CellPath): The path to the cell data.
         config (dict): Configuration dictionary containing extractor settings.
     Returns:
         CellWrapper[SpikeShapes]: A wrapper containing the loaded spike shapes.
     """
-    spikes = load_spike_shapes(cell_path.data, config)
+    spikes = load_spike_shapes(cell_path.path, config)
     return CellWrapper[SpikeShapes](cell_path.info, spikes)
 
 def describe_spikes(

@@ -5,6 +5,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from plotters import calculate_sparse_2d_histogram
+
 def visualize_slowdown_features(
     data: pd.DataFrame,
     config: dict

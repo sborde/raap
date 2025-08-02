@@ -9,9 +9,9 @@ from pathlib import Path
 import pandas as pd
 
 from common.data_utils import (
-    handle_output_dir,
-    load_config
+    handle_output_dir
 )
+from common.run_utils import load_config
 from analyses.slowdown_visualizers import visualize_slowdown_features
 
 def collect_dataset(config: dict) -> list[pd.DataFrame]:

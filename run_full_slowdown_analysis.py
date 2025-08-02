@@ -17,7 +17,7 @@ from typing import Callable
 from pathlib import Path
 
 from analyses.slowdown_analysis import analyze_cell
-from utils.file_utils import enumerate_input_files
+from common.run_utils import collect_inputs
 from utils.report_generators import compose_textfile
 
 def generate_report(
@@ -61,7 +61,7 @@ def run_slowdown_analysis(config: dict) -> None:
         """
         generate_report(figure_dicts, report_composer)
 
-    cells = enumerate_input_files(config)
+    cells = collect_inputs(config)
     results = []
     for i, cell in enumerate(cells):
         print(f"Processing file {i+1}/{len(cells)}: {cell.name}")

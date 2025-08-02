@@ -13,18 +13,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import yaml
 
-from common.data_utils import CellInfo, CellWrapper
+from common.wrappers import CellInfo, CellWrapper
 
-def load_config(config_path: str) -> dict:
-    """
-    Load the configuration from the specified path.
-    Args:
-        config_path (str): Path to the configuration file.
-    Returns:
-        dict: Loaded configuration dictionary.
-    """
-    with open(config_path, 'r', encoding='utf-8') as file:
-        return yaml.safe_load(file)
+from common.run_utils import load_config
 
 def parse_args():
     """Parse command line arguments for the analysis script.
