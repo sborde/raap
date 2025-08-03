@@ -14,17 +14,18 @@ input:
   skip_dirs:
     # - dir1
     # - dir2
-# Ouptput parameters
+# Output parameters
 output:
   # Path to the output directory
   path: C:\tmp\Bozso2025\PutRAAP\Results\IndividualSlowdownAnalysis
   # List of output formats
   # - png: save figures as PNG files
   # - svg: save figures as SVG files
-  formats:
-    - png
-  # dpi of the output png (if png is set)
-  dpi: 100
+  figures:
+    formats:
+      - png
+    # dpi of the output png (if png is set)
+    dpi: 100
   suffixes:
     # Suffixes of the output files' name
     # - scatter: suffix for the scatter histogram
@@ -38,6 +39,14 @@ output:
     valley_time_deviation:  valleys
 # Analysis parameters
 analysis:
+  # From which phase to start the analysis
+  #  - raw: start from the raw data
+  #  - processed: start extracted and analyzed spikes
+  start_phase: processed
+  # Save the analysis results
+  save_results: True
+  # Overwrite the results if they already exist
+  overwrite: True
   # Spike shape extractor parameters
   extractor:
     # name of the signal
@@ -51,8 +60,8 @@ analysis:
   # Spike description parameters
   descriptor:
     # Savitzky-Golay filter parameters, leave empty to disable
-    smooth:
-      window_length: 5
+    smooth_params:
+      window_length: 7
       polyorder: 3
     # dV threshold to detect spike start as a proportion of the max dV
     start_threshold: 0.1
@@ -79,12 +88,26 @@ analysis:
   # as the default group, which is used for the points that are not in any
   # other group, so it's no need to set its bottom-left corner.
   classification:
+    features:
+      # List of features to use for classification
+      # The features must be in the same order as in the spike descriptor
+      - name: relative_dv_drop
+        label: 'Relative dV drop'
+      - name: relative_rebound_time
+        label: 'Relative rebound time'
     groups:
       - name: 'AIS-AP'
       - name: 'UNKNOWN'
         bottom-left: [0, 0]
       - name: 'RA-AP'
         bottom-left: [0.01, 0.24]
+  episode_assignment:
+    # List of episode names to assign
+    # The episodes must be in the same order as in the spike descriptor
+    episode_names:
+      - 'rem'
+      - 'sw'
+      - 'spdl'
 plot:
   selector:
     scatter: True
@@ -141,6 +164,25 @@ plot:
     limits: [-1, 0]
     # Color of the histogram
     color: '#adadad'
+  sleep_distribution:
+    spectrogram:
+      params:
+        low: 1.0
+        high: 30.0
+        clim: [0, 1000]
+        step: 1.0
+        n_cycles: 7
+        length: 1.0
+        addtaper: False
+        taperlength: 0.1
+    event_plot:
+      # Mode to plot spikes over sleep
+      #   raster: plot spikes in a raster plot
+      #   histogram: plot spikes in a histogram
+      #   instantaneous: plot spikes in the sleep episodes
+      mode: instantaneous
+      # Parameters for the event plot
+      # For raster
   palette:
     PYR_L2-3: '#803300ff'
     PYR_L4-6: '#502d16ff'

@@ -22,7 +22,7 @@ from analyses.slowdown_descriptors import (
 )
 from analyses.slowdown_descriptors import FEATURE_PROPERTIES as FEATURES
 from data.spikes import SpikeShape, SpikeShapes, load_spike_shapes
-from processors.spike_transformers import create_transformer
+from data.spike import create_transformer
 from visualization.spikeshapes import plot_grouped_spikes
 
 def analyze_noise_characteristics(
@@ -41,7 +41,7 @@ def analyze_noise_characteristics(
 
     # Save features
     output_path = (
-        Path(config['output']['path']) /
+        Path(config['results']['path']) /
         'Preprocessed' /
         cell_path.cell_type
     )
@@ -58,7 +58,7 @@ def analyze_noise_characteristics(
     save_figure(
         noise_property_figure,
         'noise_properties',
-        config['output']
+        config['results']
     )
 
     cell_results = {
@@ -87,7 +87,7 @@ def analyze_cell(cell_path: CellPath, config: dict) -> dict:
 
     # Save features
     output_path = (
-        Path(config['output']['path']) /
+        Path(config['results']['path']) /
         'Preprocessed' /
         cell_path.cell_type
     )
@@ -95,7 +95,7 @@ def analyze_cell(cell_path: CellPath, config: dict) -> dict:
     cell_features.data.to_csv(output_path / f'{cell_path.name}.csv', index=False)
 
     # Do plots
-    suffixes = config['output']['suffixes']
+    suffixes = config['results']['suffixes']
     cell_type_color = config['plot']['palette'][cell_features.cell_type]
 
     if config['plot']['selector']['residual_histogram']:
@@ -104,7 +104,7 @@ def analyze_cell(cell_path: CellPath, config: dict) -> dict:
             cell_features,
             config['plot']['residual_histogram']
         )
-        figure_path = save_figure(cell_figure, suffixes['residual_histogram'], config['output'])
+        figure_path = save_figure(cell_figure, suffixes['residual_histogram'], config['results'])
         cell_results['images'].append({
             'path': figure_path,
             'type': 'residual_histogram'
@@ -116,7 +116,7 @@ def analyze_cell(cell_path: CellPath, config: dict) -> dict:
             cell_features,
             config['plot'],
             tuple(config['analysis']['classification']['groups'][-1]['bottom-left']))
-        figure_path = save_figure(cell_figure, suffixes['scatter'], config['output'])
+        figure_path = save_figure(cell_figure, suffixes['scatter'], config['results'])
         cell_results['images'].append({
             'path': figure_path,
             'type': 'scatter'
@@ -141,7 +141,7 @@ def analyze_cell(cell_path: CellPath, config: dict) -> dict:
             'UNKNOWN': None
         }
         cell_figure = create_spike_type_piechart(cell_features, piechart_config)
-        figure_path = save_figure(cell_figure, suffixes['category_piechart'], config['output'])
+        figure_path = save_figure(cell_figure, suffixes['category_piechart'], config['results'])
         cell_results['images'].append({
             'path': figure_path,
             'type': 'category_piechart'
@@ -165,7 +165,7 @@ def analyze_cell(cell_path: CellPath, config: dict) -> dict:
             cell_features.data,
             average_plot_config
         )
-        figure_path = save_figure(cell_figure, suffixes['category_averages'], config['output'])
+        figure_path = save_figure(cell_figure, suffixes['category_averages'], config['results'])
         cell_results['images'].append({
             'path': figure_path,
             'type': 'category_averages'
@@ -177,7 +177,7 @@ def analyze_cell(cell_path: CellPath, config: dict) -> dict:
             cell_features,
             config['plot']['valley_time_deviation']
         )
-        figure_path = save_figure(cell_figure, suffixes['valley_time_deviation'], config['output'])
+        figure_path = save_figure(cell_figure, suffixes['valley_time_deviation'], config['results'])
         cell_results['images'].append({
             'path': figure_path,
             'type': 'valley_time_deviation'

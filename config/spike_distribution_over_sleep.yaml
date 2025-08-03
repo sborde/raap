@@ -1,0 +1,210 @@
+raw_input:
+  # Type of the input
+  #  - recursive: recursively processes all files in each subdirectory
+  #  - directory: processes all files found in the given directory
+  #  - file: processes a single file of the given path
+  mode: directory
+  # Path of the input dir or the file (in case of type=file)
+  path: C:\Datasets\raap\InVivoJuxta\RSI_L2-3
+  extension: mat
+  # List of files to skip, leave empty if you want all files
+  skip_files:
+    # - file1.mat
+    # - file2.mat
+  # List of directories to skip, leave empty if you want all directories
+  skip_dirs:
+    # - dir1
+    # - dir2
+preprocessed_input:
+  # Type of the input
+  #  - recursive: recursively processes all files in each subdirectory
+  #  - directory: processes all files found in the given directory
+  #  - file: processes a single file of the given path
+  mode: directory
+  # Path of the input dir or the file (in case of type=file)
+  path: C:\tmp\Bozso2025\PutRAAP\Results\IndividualSlowdownAnalysis\01_processed\RSI_L2-3
+  extension: csv
+  # List of files to skip, leave empty if you want all files
+  skip_files:
+    # - file1.mat
+    # - file2.mat
+  # List of directories to skip, leave empty if you want all directories
+  skip_dirs:
+    # - dir1
+    # - dir2
+# Output parameters
+output:
+  # Path to the output directory
+  path: C:\tmp\Bozso2025\PutRAAP\Results\IndividualSlowdownAnalysis
+  # List of output formats
+  # - png: save figures as PNG files
+  # - svg: save figures as SVG files
+  figures:
+    formats:
+      - png
+    # dpi of the output png (if png is set)
+    dpi: 100
+  suffixes:
+    # Suffixes of the output files' name
+    # - scatter: suffix for the scatter histogram
+    scatter: scatter
+    # - grouped: suffix for the grouped spike averages
+    category_averages: averages
+    # - piechart: suffix for the spike type pie chart
+    category_piechart: piechart
+    # - residual_histogram: suffix for the residual histogram
+    residual_histogram: residuals
+    valley_time_deviation:  valleys
+# Analysis parameters
+analysis:
+  # From which phase to start the analysis
+  #  - raw: start from the raw data
+  #  - processed: start extracted and analyzed spikes
+  start_phase: processed
+  # Save the analysis results
+  save_results: True
+  # Overwrite the results if they already exist
+  overwrite: True
+  # Spike shape extractor parameters
+  extractor:
+    # name of the signal
+    signal_name: wideband
+    # name of the event marker
+    event_name: spk
+    # time window to cut the spikes
+    cut_window: [-0.001, 0.002]
+    # target sampling frequency
+    fs: 40000
+  # Spike description parameters
+  descriptor:
+    # Savitzky-Golay filter parameters, leave empty to disable
+    smooth_params:
+      window_length: 7
+      polyorder: 3
+    # dV threshold to detect spike start as a proportion of the max dV
+    start_threshold: 0.1
+    # Where to begin the description
+    #  start: begin at the spike start
+    #  time: begin after a given time after start proportional to the risetime
+    #  amplitude: begin where the amplitude reaches the given proportion
+    search_start:
+      mode: 'time'
+      param:
+        threshold: 0.15
+    # Where to end the description
+    #  peak: stop at the spike peak
+    #  dv_max: stop at the maximum dV
+    #  time: stop with a given time before the peak proportional to the risetime
+    search_end:
+      mode: 'time'
+      param:
+        threshold: 0.15
+  # 2D-threshold based classification group parameters. The groups must be 
+  # enumerated in a list. Each group is defined by the bottom-left corner of 
+  # its area. The groups must be enumerated in an increasing order, starting 
+  # from the leftmost-lowest group (the default group). The first is considered
+  # as the default group, which is used for the points that are not in any
+  # other group, so it's no need to set its bottom-left corner.
+  classification:
+    features:
+      # List of features to use for classification
+      # The features must be in the same order as in the spike descriptor
+      - name: relative_dv_drop
+        label: 'Relative dV drop'
+      - name: relative_rebound_time
+        label: 'Relative rebound time'
+    groups:
+      - name: 'AIS-AP'
+      - name: 'UNKNOWN'
+        bottom-left: [0, 0]
+      - name: 'RA-AP'
+        bottom-left: [0.01, 0.24]
+  episode_assignment:
+    # List of episode names to assign
+    # The episodes must be in the same order as in the spike descriptor
+    episode_names:
+      - 'rem'
+      - 'sw'
+      - 'spdl'
+plot:
+  selector:
+    scatter: True
+    category_averages: True
+    category_piechart: True
+    residual_histogram: True
+    valley_time_deviation: True
+  scatter:
+    # Figure size in inches
+    axis_size: [5, 5]
+    # Bin size for the 2D histogram-like scatter plot
+    bin_size: 0.005
+    # Point sizes for the scatter plot, each point is interpolated between them
+    point_sizes: [10, 1000]
+    axis_limits:
+      x: [0.0, 0.6]
+      y: [0.0, 0.8]
+  category_averages:
+    # Size of one Axis on the figure, the full size will be calculated
+    axis_size: [5, 2.5]
+    xlim: [-1, 2]
+    # Plotting mode for the average shape
+    #   raw: plot and average spikes as they are
+    #   align: set each spike's start to 0
+    #   normalize: normalize spikes start-to-peak
+    mode: raw
+    average:
+      linewidth: 2
+      alpha: 1
+    superimposed:
+      linewidth: 1
+      alpha: 0.5
+      color: "#adadad"
+    # Time window for the average shape in seconds
+    time_window: [-0.001, 0.002]
+  category_piechart:
+    # Size of the axis
+    axis_size: [5, 5]
+  residual_histogram:
+    # Size of the axis
+    axis_size: [5, 5]
+    # Number of bins for the histogram
+    bins: 100
+    # Histogram limits
+    limits: [0, 100]
+    # Color of the histogram
+    color: '#adadad'
+  valley_time_deviation:
+    # Size of the axis
+    axis_size: [5, 5]
+    # Number of bins for the histogram
+    bins: 100
+    # Histogram limits
+    limits: [-1, 0]
+    # Color of the histogram
+    color: '#adadad'
+  sleep_distribution:
+    spectrogram:
+      params:
+        low: 1.0
+        high: 30.0
+        clim: [0, 1000]
+        step: 1.0
+        n_cycles: 7
+        length: 1.0
+        addtaper: False
+        taperlength: 0.1
+    event_plot:
+      # Mode to plot spikes over sleep
+      #   raster: plot spikes in a raster plot
+      #   histogram: plot spikes in a histogram
+      #   instantaneous: plot spikes in the sleep episodes
+      mode: instantaneous
+      # Parameters for the event plot
+      # For raster
+  palette:
+    PYR_L2-3: '#803300ff'
+    PYR_L4-6: '#502d16ff'
+    RSI_L2-3: '#ff48a3ff'
+    RSI_L4-6: '#800080ff'
+    FSI_L2-3: '#d54500ff'
+    FSI_L4-6: '#7a0000ff'

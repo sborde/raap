@@ -114,57 +114,58 @@ class Wavelet:
 
         return conv_fft
 
+if __name__ == "__main__":
 
-t = np.linspace(0, 10, 10001)
+    t = np.linspace(0, 10, 10001)
 
-theta = np.where(
-    (4 <= t) & (t < 7),
-    np.sin(2 * np.pi * 7.5 * t),
-    0
-)
-spindle = np.where(
-    (2<=t) & (t<2.75),
-    np.sin(2 * np.pi * 15 * t),
-    0
-)
-gamma = np.where(
-    (5<=t) & (t<5.2),
-    np.sin(2 * np.pi * 70 * t),
-    0
-)
+    theta = np.where(
+        (4 <= t) & (t < 7),
+        np.sin(2 * np.pi * 7.5 * t),
+        0
+    )
+    spindle = np.where(
+        (2<=t) & (t<2.75),
+        np.sin(2 * np.pi * 15 * t),
+        0
+    )
+    gamma = np.where(
+        (5<=t) & (t<5.2),
+        np.sin(2 * np.pi * 70 * t),
+        0
+    )
 
-signal = (
-    0.1 * np.sin(2 * np.pi * 1 * t) +
-    spindle +
-    gamma +
-    theta +
-    np.random.normal(0, 0.1, len(t))
-)
+    signal = (
+        0.1 * np.sin(2 * np.pi * 1 * t) +
+        spindle +
+        gamma +
+        theta +
+        np.random.normal(0, 0.1, len(t))
+    )
 
-spectrogram = calculateTFDPower(
-    signal,
-    si=0.001,
-    params=WAVELET_PARAM
-)
+    spectrogram = calculateTFDPower(
+        signal,
+        si=0.001,
+        params=WAVELET_PARAM
+    )
 
-fig, axs = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
-axs[0].plot(t, signal)
-axs[0].set_title('Artificial Spindle and Gamma with noise')
-axs[0].set_xlabel('Time (s)')
-axs[0].set_ylabel('Amplitude')
+    fig, axs = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+    axs[0].plot(t, signal)
+    axs[0].set_title('Artificial Spindle and Gamma with noise')
+    axs[0].set_xlabel('Time (s)')
+    axs[0].set_ylabel('Amplitude')
 
-# Use pcolormesh as the counterpart of Matlab's pcolor
-im = axs[1].pcolormesh(
-    t,
-    np.arange(WAVELET_PARAM['low'], WAVELET_PARAM['high'] + WAVELET_PARAM['step'], WAVELET_PARAM['step']),
-    spectrogram,
-    shading='auto',
-    cmap='jet'
-)
-fig.colorbar(im, ax=axs[1], label='Power')
-axs[1].set_title('Time-Frequency Distribution (Spectrogram)')
-axs[1].set_xlabel('Time (s)')
-axs[1].set_ylabel('Frequency (Hz)')
+    # Use pcolormesh as the counterpart of Matlab's pcolor
+    im = axs[1].pcolormesh(
+        t,
+        np.arange(WAVELET_PARAM['low'], WAVELET_PARAM['high'] + WAVELET_PARAM['step'], WAVELET_PARAM['step']),
+        spectrogram,
+        shading='auto',
+        cmap='jet'
+    )
+    fig.colorbar(im, ax=axs[1], label='Power')
+    axs[1].set_title('Time-Frequency Distribution (Spectrogram)')
+    axs[1].set_xlabel('Time (s)')
+    axs[1].set_ylabel('Frequency (Hz)')
 
-plt.tight_layout()
-plt.show()
+    plt.tight_layout()
+    plt.show()

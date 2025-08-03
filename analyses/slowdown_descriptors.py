@@ -9,7 +9,8 @@ import seaborn as sns
 
 from common.data_utils import PathEntry
 from data.spikes import SpikeShape, SpikeShapes, load_spike_shapes
-from plotters import calculate_sparse_2d_histogram, create_debug_images
+from data.spike import create_start_finder
+from .plotters import calculate_sparse_2d_histogram, create_debug_images
 
 FEATURE_PROPERTIES = [
     {
@@ -21,33 +22,6 @@ FEATURE_PROPERTIES = [
         'label': 'Relative rebound time'
     }
 ]
-
-def find_start_index(v: np.ndarray, params: dict) -> int | None:
-    """
-    Find the start index of a spike.
-
-    It first smooths the signal, then calculates the first derivative.
-    We consider threshold dV value as the given fraction of the maximum
-    derivative value before the maximum. If the signal never reaches this
-    threshold, it returns None. Else, it returns the first index where the
-    derivative is at or above the threshold.
-    """
-
-    if 'smooth' in params and params['smooth']:
-        v = savgol_filter(v, **params['smooth'])
-
-    peak_i = np.argmax(v)
-    dv = np.diff(v[:peak_i])
-    if len(dv) == 0:
-        # if there is no derivative, return None
-        return None
-    max_dv_i = np.argmax(dv)
-    dv_ratio = params['start_threshold']
-    threshold_dv = dv_ratio * dv[max_dv_i]
-
-    below_index = np.where(dv[:max_dv_i] < threshold_dv)[0]
-
-    return below_index[-1] + 1 if len(below_index) > 0 else None
 
 def find_rise_start_index(
     v: np.ndarray,
@@ -72,8 +46,8 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
     Calculate the features of the spike rising phase.
     """
 
-    spike_peak_index = np.argmin(np.abs(spike.times - 0)).astype(int)
-    start_i = find_start_index(spike.values[:spike_peak_index + 1], params)
+    start_finder = create_start_finder(params)
+    start_i = start_finder(spike)
 
     # if the start cannot be detected, return None
     if start_i is None:
@@ -81,8 +55,8 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
 
     noise_properties = {}
     v = spike.values
-    if 'smooth' in params and params['smooth']:
-        v = savgol_filter(v, **params['smooth'])
+    if 'smooth_params' in params and params['smooth_params']:
+        v = savgol_filter(v, **params['smooth_params'])
 
         noise_properties = {
             'raw_power': np.mean(spike.values ** 2),
@@ -210,70 +184,6 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
         } | noise_properties)
 
     return sorted(features, key=lambda x: x['dv_drop'])[-1]
-
-def batch_calculate_rising_features(
-    spikes: SpikeShapes,
-    config: dict
-) -> pd.DataFrame:
-    """Extracts and describes the rising features of spikes."""
-
-    def update_progress(current: int) -> None:
-        """Updates the progress of the feature extraction."""
-        print(f'Processing spike {current + 1}/{len(spikes)}...', end='\r')
-
-    features = []
-    for i, spike in enumerate(spikes):
-        update_progress(i)
-        feature = calculate_rising_features(spike, config)
-        if feature is not None:
-            features.append(feature)
-    print()
-
-    if len(features) < len(spikes):
-        n_errors = len(spikes) - len(features)
-        print(f'[INFO]: {n_errors} spike\'s start couldn\'t be detected.')
-
-    return convert_features_to_dataframe(features)
-
-
-class RisingFeatureCalculator:
-    """
-    A class to calculate rising phase features of spikes.
-    """
-
-    def __init__(self, config: dict):
-        self._config = config
-        self._n_spikes = 0
-
-    def __call__(self, spikes: SpikeShapes) -> pd.DataFrame:
-        """
-        Calculate the features for a list of spikes.
-        """
-
-        self._n_spikes = len(spikes)
-        features = []
-        for i, spike in enumerate(spikes):
-            self._update_progress(i)
-            feature = self._calculate(spike)
-            if feature is not None:
-                features.append(feature)
-        print()
-
-        if len(features) < len(spikes):
-            n_errors = len(spikes) - len(features)
-            print(f'[INFO]: {n_errors} spike\'s start couldn\'t be detected.')
-
-        return convert_features_to_dataframe(features)
-
-    def _update_progress(self, current: int) -> None:
-        """Updates the progress of the feature extraction."""
-        print(f'Processing spike {current + 1}/{self._n_spikes}...', end='\r')
-
-    def _calculate(self, spike: SpikeShape) -> dict | None:
-        """
-        Calculate the features for a single spike.
-        """
-        return calculate_rising_features(spike, self._config)
 
 def convert_features_to_dataframe(features: list[dict]) -> pd.DataFrame:
     """

@@ -12,8 +12,6 @@ from scipy.signal import savgol_filter
 
 from data.series import SegmentMatrix, DataSeries, SeriesMatrix
 from signalizer.model.experiment.recordings import MatRecording
-from signalizer.model.experiment.sequences import EventVector
-from signalizer.model.wrappers import InstanceMatrix
 from signalizer.processing.extractors import EventRelatedSegmentExtractor
 from signalizer.processing.factories import ProcessingSequence
 from signalizer.processing.retrievers import SignalRetriever, EventRetriever

@@ -46,7 +46,7 @@ def run_slowdown_analysis(config: dict) -> None:
     """
 
     template_path = Path('html_templates') / 'index.html'
-    report_path = Path(config['output']['path']) / 'index_pooled.html'
+    report_path = Path(config['results']['path']) / 'index_pooled.html'
 
     def report_composer(json_string: str) -> None:
         """

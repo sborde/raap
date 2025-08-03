@@ -27,8 +27,8 @@ def setup_result_directory(output_str: str) -> dict:
     """
     output = Path(output_str)
     paths = {}
-    for subdir in ['01_processed', '02_figures', '03_statistics']:
-        paths[subdir] = (output / subdir)
+    for i, subdir in enumerate(['processed', 'figures', 'statistics']):
+        paths[subdir] = (output / f'0{i+1}_{subdir}')
         paths[subdir].mkdir(parents=True, exist_ok=True)
     return paths
 
