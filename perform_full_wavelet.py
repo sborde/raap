@@ -12,8 +12,8 @@ WAVELET_PARAM = {
     'taperlength': 0.1
 }
 
-def calculateTFDPower(
-    signal: np.ndarray,
+def calculate_tfd_power(
+    v: np.ndarray,
     si: float,
     params: dict
 ) -> np.ndarray:
@@ -30,13 +30,13 @@ def calculateTFDPower(
     frequencies = np.arange(params['low'], params['high'] + params['step'], params['step'])
     powers = []
     for frequency in frequencies:
-        wavelet  = createMorletWavelet(
+        wavelet  = create_morlet_wavelet(
            frequency,
            si,
            params['n_cycles'],
            params['length']
         )
-        conv_fft = convolveWithFft(signal, wavelet)
+        conv_fft = convolve_with_fft(v, wavelet)
         #   taperlength=round(parameters.taperlength/parameters.interval);
         #   conv_fft = convolveWithFft([inputSignal(taperlength:-1:1,:);inputSignal;inputSignal(end:-1:end-taperlength,:)], wavelet); % ha a taperlength hosszabb, mint az inputSignal, akkor gebasz van, de ilyen elvileg nem fordulhat el�..
         #   conv_fft =conv_fft(:,taperlength+1:taperlength+size(inputSignal,1));
@@ -46,7 +46,7 @@ def calculateTFDPower(
     power_matrix = np.stack(powers, axis=0)
     return power_matrix
 
-def convolveWithFft(signal: np.ndarray, response: np.ndarray) -> np.ndarray:
+def convolve_with_fft(v: np.ndarray, response: np.ndarray) -> np.ndarray:
     """
     Performs convolution of the signal with the response using FFT.
     Args:
@@ -55,14 +55,14 @@ def convolveWithFft(signal: np.ndarray, response: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: The convolved signal.
     """
-    new_length = len(signal) + len(response) - 1
+    new_length = len(v) + len(response) - 1
     new_length_pow = 2 ** int(np.ceil(np.log2(new_length)))
     half_response_length = round((len(response)-1)/2)
-        
-    signal = np.nan_to_num(signal, nan=0.0).squeeze()
+
+    v = np.nan_to_num(v, nan=0.0).squeeze()
     response = np.nan_to_num(response, nan=0.0).squeeze()
 
-    signal_fft = fft(signal, new_length_pow)
+    signal_fft = fft(v, new_length_pow)
     response_fft = fft(response, new_length_pow)
     conv_fft = ifft(signal_fft * response_fft)
     conv_fft = conv_fft[:new_length]
@@ -71,7 +71,7 @@ def convolveWithFft(signal: np.ndarray, response: np.ndarray) -> np.ndarray:
     return conv_fft
 
 
-def createMorletWavelet(
+def create_morlet_wavelet(
     frequency: float,
     si: float,
     n_cycles: int = 7,
@@ -84,12 +84,12 @@ def createMorletWavelet(
     sigma_f = frequency / n_cycles
     sigma_t = 1 / (2 * np.pi * sigma_f)
     sigma_t_sq = sigma_t ** 2
-    A = np.sqrt(1 / (sigma_t * np.sqrt(np.pi)))
+    amplitude = np.sqrt(1 / (sigma_t * np.sqrt(np.pi)))
 
     t = np.arange(-length, length + si, si)
     t_sq = t ** 2
 
-    wavelet = A * np.exp(-t_sq / (2 * sigma_t_sq)) * np.exp(2 * 1j * np.pi * frequency * t)
+    wavelet = amplitude * np.exp(-t_sq / (2 * sigma_t_sq)) * np.exp(2 * 1j * np.pi * frequency * t)
     return wavelet
 
 
@@ -114,57 +114,60 @@ class Wavelet:
 
         return conv_fft
 
+if __name__ == "__main__":
+    # Example usage of the wavelet transform
+    # Create an artificial signal with a spindle and gamma oscillation
 
-t = np.linspace(0, 10, 10001)
+    test_t = np.linspace(0, 10, 10001)
 
-theta = np.where(
-    (4 <= t) & (t < 7),
-    np.sin(2 * np.pi * 7.5 * t),
-    0
-)
-spindle = np.where(
-    (2<=t) & (t<2.75),
-    np.sin(2 * np.pi * 15 * t),
-    0
-)
-gamma = np.where(
-    (5<=t) & (t<5.2),
-    np.sin(2 * np.pi * 70 * t),
-    0
-)
+    theta = np.where(
+        (4 <= test_t) & (test_t < 7),
+        np.sin(2 * np.pi * 7.5 * test_t),
+        0
+    )
+    spindle = np.where(
+        (2<=test_t) & (test_t<2.75),
+        np.sin(2 * np.pi * 15 * test_t),
+        0
+    )
+    gamma = np.where(
+        (5<=test_t) & (test_t<5.2),
+        np.sin(2 * np.pi * 70 * test_t),
+        0
+    )
 
-signal = (
-    0.1 * np.sin(2 * np.pi * 1 * t) +
-    spindle +
-    gamma +
-    theta +
-    np.random.normal(0, 0.1, len(t))
-)
+    test_signal = (
+        0.1 * np.sin(2 * np.pi * 1 * test_t) +
+        spindle +
+        gamma +
+        theta +
+        np.random.normal(0, 0.1, len(test_t))
+    )
 
-spectrogram = calculateTFDPower(
-    signal,
-    si=0.001,
-    params=WAVELET_PARAM
-)
+    spectrogram = calculate_tfd_power(
+        test_signal,
+        si=0.001,
+        params=WAVELET_PARAM
+    )
 
-fig, axs = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
-axs[0].plot(t, signal)
-axs[0].set_title('Artificial Spindle and Gamma with noise')
-axs[0].set_xlabel('Time (s)')
-axs[0].set_ylabel('Amplitude')
+    fig, axs = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+    axs[0].plot(test_t, test_signal)
+    axs[0].set_title('Artificial Spindle and Gamma with noise')
+    axs[0].set_xlabel('Time (s)')
+    axs[0].set_ylabel('Amplitude')
 
-# Use pcolormesh as the counterpart of Matlab's pcolor
-im = axs[1].pcolormesh(
-    t,
-    np.arange(WAVELET_PARAM['low'], WAVELET_PARAM['high'] + WAVELET_PARAM['step'], WAVELET_PARAM['step']),
-    spectrogram,
-    shading='auto',
-    cmap='jet'
-)
-fig.colorbar(im, ax=axs[1], label='Power')
-axs[1].set_title('Time-Frequency Distribution (Spectrogram)')
-axs[1].set_xlabel('Time (s)')
-axs[1].set_ylabel('Frequency (Hz)')
+    # Use pcolormesh as the counterpart of Matlab's pcolor
+    im = axs[1].pcolormesh(
+        test_t,
+        np.arange(WAVELET_PARAM['low'], WAVELET_PARAM['high'] + WAVELET_PARAM['step'], WAVELET_PARAM['step']),
+        spectrogram,
+        shading='auto',
+        cmap='jet'
+    )
+    fig.colorbar(im, ax=axs[1], label='Power')
+    axs[1].set_title('Time-Frequency Distribution (Spectrogram)')
+    axs[1].set_xlabel('Time (s)')
+    axs[1].set_ylabel('Frequency (Hz)')
 
-plt.tight_layout()
-plt.show()
+    plt.tight_layout()
+    plt.show()

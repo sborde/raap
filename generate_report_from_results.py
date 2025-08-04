@@ -7,7 +7,8 @@ FIGURE_ORDER = [
     'residuals',
     'scatter',
     'piechart',
-    'averages'
+    'averages',
+    'sleep_distribution'
 ]
 
 FIGURE_WEIGHT = {name: i for i, name in enumerate(FIGURE_ORDER)}
