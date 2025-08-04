@@ -96,7 +96,7 @@ def mark_episode(
 def assign_interval_to_spike(
     recording: MatRecording,
     spikes: pd.DataFrame,
-    episode_names: list[str]
+    episode_groups: list[dict]
 ) -> pd.DataFrame:
     """
     Assigns the interval's name in which the spike occurs.
@@ -107,12 +107,19 @@ def assign_interval_to_spike(
         pd.DataFrame: The DataFrame with episode memberships added.
     """
     timestamps = spikes['timestamp'].to_numpy()
-    for episode_name in episode_names:
-        spikes[episode_name] = mark_episode(
-            timestamps,
-            episode_name,
-            recording
-        )
+    for episode_group in episode_groups:
+        group_name = episode_group['name']
+        spikes[group_name] = 'none'
+        for episode_name in episode_group['episodes']:
+            mask = mark_episode(
+                timestamps,
+                episode_name,
+                recording
+            )
+            spikes[episode_name] = mask
+            if np.isnan(mask).all():
+                continue
+            spikes.loc[mask == 1, group_name] = episode_name
     return spikes
 
 if __name__ == "__main__":
@@ -145,13 +152,81 @@ if __name__ == "__main__":
         spikes = assign_interval_to_spike(
             recording,
             spikes.copy(),
-            config['analysis']['episode_assignment']['episode_names']
+            config['analysis']['episode_assignment']['episode_groups']
         )
         spikes.to_csv(
             results_path / f'{raw_cell_path.info.name}_with_episodes.csv',
             index=False
         )
 
+        sleep_stages = config['analysis']['episode_assignment']['episode_groups'][0]['episodes']
+        sleep_stages.append('none')
+        stats = []
+        for spike_type in spike_types:
+            subset = spikes[spikes['spike_type'] == spike_type]
+            for episode_name in sleep_stages:
+                count = np.sum(subset['sleep_stages'] == episode_name)
+                stats.append({
+                    'spike_type': spike_type,
+                    'episode': episode_name,
+                    'ratio': (
+                        count / len(subset) if len(subset) > 0 else 0
+                    )
+                    })
+        stats_df = pd.DataFrame(stats)
+        fig, ax = plt.subplots(figsize=(7.5, 5))
+        palette = config['plot']['spiketype_sleep_barchart']['palette']
+        for i, spike_type in enumerate(spike_types):
+            spike_stats = stats_df[stats_df['spike_type'] == spike_type]
+            bottom = 0
+            for j, episode_name in enumerate(sleep_stages):
+                episode_stats = spike_stats[spike_stats['episode'] == episode_name]
+                ratio = episode_stats['ratio'].values
+                if episode_stats.empty:
+                    continue
+                ax.fill_between(
+                    [i + 0.75, i + 1.25],
+                    bottom,
+                    bottom + ratio,
+                    color=palette[episode_name],
+                    label=f'{episode_name}'
+                )
+                bottom += ratio
+
+        handles, labels = ax.get_legend_handles_labels()
+        handle_dict = {}
+        for handle, label in zip(handles, labels):
+            if label not in handle_dict:
+                handle_dict[label] = handle
+
+        # Get unique handles and labels
+        unique_handles = list(handle_dict.values())
+        unique_labels = list(handle_dict.keys())
+
+        ax.legend(
+            unique_handles,
+            unique_labels,
+            title='Sleep stages',
+            loc='upper left',
+            bbox_to_anchor=(1.0, 1),
+            borderaxespad=0.
+        )
+
+        plt.xticks(
+            np.arange(len(spike_types)) + 1,
+            spike_types.tolist()
+        )
+        plt.xlabel('Spike Type')
+        plt.ylabel('Ratio')
+        plt.title('Sleep Stage ratio per Spike Type')
+        plt.tight_layout()
+        fig.savefig(
+            figures_path /
+            f"{raw_cell_path.info.name}_spiketype_sleepstage_ratio.png",
+            dpi=100
+        )
+        plt.close(fig)
+        break
         fig, axes = plt.subplots(
             2 + len(spike_types), 1, figsize=(15, 8),
             sharex=True, layout='constrained'
