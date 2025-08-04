@@ -218,10 +218,11 @@ if __name__ == "__main__":
                     color=color,
                     alpha=1.0
                 )
-
+                axes[-1 - i].set_ylabel('Inst. Freq. (Hz)')
         axes[1].set_yticks(range(len(event_styles)))
         axes[1].set_yticklabels([style['name'] for style in event_styles])
         axes[1].set_ylim((-1, len(event_styles)))
+        
 
         axes[-1].set_xlabel('Time (s)')
         fig.savefig(

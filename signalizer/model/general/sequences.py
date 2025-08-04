@@ -13,6 +13,13 @@ class IntervalSequence(HDFExportable):
         starts = np.asarray(starts).squeeze()
         ends = np.asarray(ends).squeeze()
 
+        if starts.ndim == 0:
+            starts = np.array([starts])
+
+        if ends.ndim == 0:
+            ends = np.array([ends])
+
+
         if starts.ndim != 1 or ends.ndim != 1:
             raise ValueError('Input vectors must be 1D vector or row or column matrix.')
         if starts.size != ends.size:
