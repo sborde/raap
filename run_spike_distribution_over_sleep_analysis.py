@@ -146,6 +146,13 @@ if __name__ == "__main__":
             raw_cell_path.info
         )
 
+        celltype_results_path = results_path / raw_cell_path.cell_type
+        if not celltype_results_path.exists():
+            celltype_results_path.mkdir(parents=True, exist_ok=True)
+        celltype_figures_path = figures_path / raw_cell_path.cell_type
+        if not celltype_figures_path.exists():
+            celltype_figures_path.mkdir(parents=True, exist_ok=True)
+
         recording = MatRecording(raw_cell_path.data)
         spikes = load_spike_features(preprocessed_cell_path, config['analysis'])
 
@@ -157,7 +164,8 @@ if __name__ == "__main__":
             config['analysis']['episode_assignment']['episode_groups']
         )
         spikes.to_csv(
-            results_path / f'{raw_cell_path.info.name}_with_episodes.csv',
+            celltype_results_path /
+            f'{raw_cell_path.info.name}_with_episodes.csv',
             index=False
         )
 
@@ -178,6 +186,11 @@ if __name__ == "__main__":
                         )
                     })
             stats_df = pd.DataFrame(stats)
+            stats_df.to_excel(
+                celltype_results_path /
+                f'{raw_cell_path.name}_spiketype_{group_name}_stats.xlsx',
+                index=False
+            )
             fig, ax = plt.subplots(figsize=(7.5, 5))
 
             for i, spike_type in enumerate(spike_types):
@@ -225,7 +238,7 @@ if __name__ == "__main__":
             plt.title(f'{group_name.capitalize()} ratio per Spike Type')
             plt.tight_layout()
             fig.savefig(
-                figures_path /
+                celltype_figures_path /
                 f"{raw_cell_path.info.name}_spiketype_{group_name}_ratio.png",
                 dpi=100
             )
@@ -306,7 +319,7 @@ if __name__ == "__main__":
 
         axes[-1].set_xlabel('Time (s)')
         fig.savefig(
-            figures_path /
+            celltype_figures_path /
             f"{raw_cell_path.info.name}_sleep_distribution.png",
             dpi=100
         )
