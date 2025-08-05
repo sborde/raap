@@ -1,0 +1,24 @@
+input:
+  path: C:/tmp/Bozso2025/PutRAAP/Results/IndividualSlowdownAnalysis/03_results/Results
+output:
+  path: C:/tmp/Bozso2025/PutRAAP/Results/IndividualSlowdownAnalysis/03_results/Figures
+plot:
+  episode_groups:
+    - name: sleep_stages
+      episodes:
+        - 'awake'
+        - 'theta'
+        - 'sw'
+    - name: nrem
+      episodes:
+        - 'spdl'
+        - 'delta'
+  spike_types:
+    - 'AIS-AP'
+    - 'UNKNOWN'
+    - 'RA-AP'
+  episode_palette:
+    awake: '#0000ff'
+    theta: '#ff0000'
+    sw: '#00ff00'
+    none: '#adadad'
