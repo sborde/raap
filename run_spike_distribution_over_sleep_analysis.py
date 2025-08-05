@@ -137,6 +137,8 @@ if __name__ == "__main__":
     figures_path = output_path / 'Figures'
     figures_path.mkdir(parents=True, exist_ok=True)
 
+    episode_palette = config['plot']['spiketype_sleep_barchart']['palette']
+
     for raw_cell_path in raw_inputs:
         print(f"Processing cell: {raw_cell_path.name}")
         preprocessed_cell_path = get_preprocessed_path(
@@ -159,74 +161,77 @@ if __name__ == "__main__":
             index=False
         )
 
-        sleep_stages = config['analysis']['episode_assignment']['episode_groups'][0]['episodes']
-        sleep_stages.append('none')
-        stats = []
-        for spike_type in spike_types:
-            subset = spikes[spikes['spike_type'] == spike_type]
-            for episode_name in sleep_stages:
-                count = np.sum(subset['sleep_stages'] == episode_name)
-                stats.append({
-                    'spike_type': spike_type,
-                    'episode': episode_name,
-                    'ratio': (
-                        count / len(subset) if len(subset) > 0 else 0
-                    )
+        episode_groups = config['analysis']['episode_assignment']['episode_groups']
+        for episode_group in episode_groups:
+            group_name = episode_group['name']
+            episode_names = episode_group['episodes'] + ['none']
+            stats = []
+            for spike_type in spike_types:
+                subset = spikes[spikes['spike_type'] == spike_type]
+                for episode_name in episode_names:
+                    count = np.sum(subset[group_name] == episode_name)
+                    stats.append({
+                        'spike_type': spike_type,
+                        'episode': episode_name,
+                        'ratio': (
+                            count / len(subset) if len(subset) > 0 else 0
+                        )
                     })
-        stats_df = pd.DataFrame(stats)
-        fig, ax = plt.subplots(figsize=(7.5, 5))
-        palette = config['plot']['spiketype_sleep_barchart']['palette']
-        for i, spike_type in enumerate(spike_types):
-            spike_stats = stats_df[stats_df['spike_type'] == spike_type]
-            bottom = 0
-            for j, episode_name in enumerate(sleep_stages):
-                episode_stats = spike_stats[spike_stats['episode'] == episode_name]
-                ratio = episode_stats['ratio'].values
-                if episode_stats.empty:
-                    continue
-                ax.fill_between(
-                    [i + 0.75, i + 1.25],
-                    bottom,
-                    bottom + ratio,
-                    color=palette[episode_name],
-                    label=f'{episode_name}'
-                )
-                bottom += ratio
+            stats_df = pd.DataFrame(stats)
+            fig, ax = plt.subplots(figsize=(7.5, 5))
 
-        handles, labels = ax.get_legend_handles_labels()
-        handle_dict = {}
-        for handle, label in zip(handles, labels):
-            if label not in handle_dict:
-                handle_dict[label] = handle
+            for i, spike_type in enumerate(spike_types):
+                spike_stats = stats_df[stats_df['spike_type'] == spike_type]
+                bottom = 0
+                for j, episode_name in enumerate(episode_names):
+                    episode_stats = spike_stats[spike_stats['episode'] == episode_name]
+                    if episode_stats.empty:
+                        continue
+                    ratio = episode_stats['ratio'].values
+                    ax.fill_between(
+                        [i + 0.75, i + 1.25],
+                        bottom,
+                        bottom + ratio,
+                        color=episode_palette[episode_name],
+                        label=f'{episode_name}'
+                    )
+                    bottom += ratio
 
-        # Get unique handles and labels
-        unique_handles = list(handle_dict.values())
-        unique_labels = list(handle_dict.keys())
+            handles, labels = ax.get_legend_handles_labels()
+            handle_dict = {}
+            for handle, label in zip(handles, labels):
+                if label not in handle_dict:
+                    handle_dict[label] = handle
 
-        ax.legend(
-            unique_handles,
-            unique_labels,
-            title='Sleep stages',
-            loc='upper left',
-            bbox_to_anchor=(1.0, 1),
-            borderaxespad=0.
-        )
+            # Get unique handles and labels
+            unique_handles = list(handle_dict.values())
+            unique_labels = list(handle_dict.keys())
 
-        plt.xticks(
-            np.arange(len(spike_types)) + 1,
-            spike_types.tolist()
-        )
-        plt.xlabel('Spike Type')
-        plt.ylabel('Ratio')
-        plt.title('Sleep Stage ratio per Spike Type')
-        plt.tight_layout()
-        fig.savefig(
-            figures_path /
-            f"{raw_cell_path.info.name}_spiketype_sleepstage_ratio.png",
-            dpi=100
-        )
-        plt.close(fig)
-        break
+            ax.legend(
+                unique_handles,
+                unique_labels,
+                title=group_name.capitalize(),
+                loc='upper left',
+                bbox_to_anchor=(1.0, 1),
+                borderaxespad=0.
+            )
+
+            plt.xticks(
+                np.arange(len(spike_types)) + 1,
+                spike_types.tolist()
+            )
+            plt.xlabel('Spike Type')
+            plt.ylabel('Ratio')
+            plt.title(f'{group_name.capitalize()} ratio per Spike Type')
+            plt.tight_layout()
+            fig.savefig(
+                figures_path /
+                f"{raw_cell_path.info.name}_spiketype_{group_name}_ratio.png",
+                dpi=100
+            )
+            plt.close(fig)
+
+        continue
         fig, axes = plt.subplots(
             2 + len(spike_types), 1, figsize=(15, 8),
             sharex=True, layout='constrained'
