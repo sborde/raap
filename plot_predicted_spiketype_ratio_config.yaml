@@ -1,0 +1,48 @@
+input:
+  # Type of the input
+  #  - recursive: recursively processes all files in each subdirectory
+  #  - directory: processes all files found in the given directory
+  #  - file: processes a single file of the given path
+  mode: recursive
+  # Path of the input dir or the file (in case of type=file)
+  path: E:\Data\BogiSejtek\PutRAAP\20250722\Preprocessed
+  # List of files to skip, leave empty if you want all files
+  skip_files:
+    # - file1.mat
+    # - file2.mat
+  # List of directories to skip, leave empty if you want all directories
+  skip_dirs:
+    # - dir1
+    # - dir2
+# Output parameters
+output:
+  # Path to the output directory
+  path: E:\Data\BogiSejtek\PutRAAP\20250722\Figures
+  # dpi of the output PNG
+  dpi: 100
+  # do SVG along with PNG
+  do_svg: True
+  suffix: spiketype_ratio_barchart
+plot:
+  # Size of the axis in inches (width, height)
+  axis_size: [30, 10]
+  styles:
+    - type: AIS-AP
+      barcolor: cell_type
+      edgecolor: cell_type
+      hatch:
+    - type: UNKNOWN
+      barcolor: '#d0d0d0'
+      edgecolor: '#d0d0d0'
+      hatch:
+    - type: RA-AP
+      barcolor: '#ffffff'
+      edgecolor: cell_type
+      hatch: '//'
+  palette:
+    PYR_L2-3: '#803300ff'
+    PYR_L4-6: '#502d16ff'
+    RSI_L2-3: '#ff48a3ff'
+    RSI_L4-6: '#800080ff'
+    FSI_L2-3: '#d54500ff'
+    FSI_L4-6: '#7a0000ff'
