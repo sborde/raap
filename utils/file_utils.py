@@ -6,16 +6,48 @@ import yaml
 
 from common.data_utils import CellWrapper, CellInfo
 
-def load_config(config_path: str) -> dict:
+def load_config(path: str) -> dict:
     """
     Load the configuration from the specified path.
     Args:
-        config_path (str): Path to the configuration file.
+        path (str): Path to the configuration file.
     Returns:
         dict: Loaded configuration dictionary.
     """
-    with open(config_path, 'r', encoding='utf-8') as file:
+    with open(
+        Path(path).with_suffix('.yaml'),
+        'r',
+        encoding='utf-8'
+    ) as file:
         return yaml.safe_load(file)
+
+def load_customized_config(name: str) -> dict:
+    """
+    Load a customized configuration file based on the provided name.
+    Args:
+        name (str): Name of the configuration file (without extension).
+    Returns:
+        dict: Loaded configuration dictionary.
+    """
+    default_path = f'config_defaults/{name}.yaml'
+    custom_path = f'config{name}.yaml'
+
+    config = {}
+    if Path(default_path).exists():
+        config = load_config(default_path)
+    if not Path(custom_path).exists():
+        return config
+
+    custom_config = load_config(custom_path)
+    stack = [(config, custom_config)]
+    while stack:
+        curr_config, curr_custom = stack.pop()
+        for key, value in curr_custom.items():
+            if key not in curr_config:
+                curr_config[key] = value
+            elif isinstance(curr_config[key], dict) and isinstance(value, dict):
+                stack.append((curr_config[key], value))
+    return config
 
 def enumerate_input_files(config: dict) -> list[CellWrapper[Path]]:
     """

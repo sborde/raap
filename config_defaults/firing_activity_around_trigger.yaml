@@ -1,0 +1,90 @@
+# Paths for the data files
+data:
+  # Path to the raw data where files are grouped into subdirectories.
+  raw_data:
+    path: C:\Datasets\raap\InVivoJuxta
+    extension: mat
+  # Path to the processed_data directory with the same structure as raw_data.
+  processed_data:
+    path: C:\tmp\Bozso2025\PutRAAP\Results\TriggeredFiringComparison\01_processed_data
+    extension: csv
+    suffix: spikes
+# Input selection: what to process from the data folders?
+#  all: files in all directories with the given extension, skips the files 
+#    in the skip_files list and dirs in the skip_dirs list
+# mode: all
+# skip_files:
+#   - file1.mat
+#   - file2.mat
+# skip_dirs:
+#   - dir1
+#   - dir2
+#  - all files in the directories specified in select_dirs list, without the
+#    files in the skip_files list. In this case, skip_dirs ignored.
+# mode: directory
+# select_dirs:
+#   - RSI_L2-3
+#   # - dir1
+#   # - dir2
+# skip_files:
+#   - file1.mat
+#   - file2.mat
+# mode: file
+#  - files in any of the subdirectories from the select_files
+# select_files:
+#   - file1.mat
+#   - file2.mat
+input:
+  mode: directory
+  select_dirs:
+    - RSI_L2-3
+  skip_files:
+# Output directory where the figures and statistics directories will be created
+# It will follow the same structure as the input folders.
+output:
+  path: C:\tmp\Bozso2025\PutRAAP\Results\TriggeredFiringComparison\02_results
+# Parameters for the analysis.
+params:
+  # Name of the trigger
+  trigger: delta_end
+  # List of spike types to analyze (colors can be set later)
+  spike_types:
+    - AIS-AP
+    - RA-AP
+  # Parameters for the peri-trigger time histogram
+  histogram:
+    # Analysis window around the trigger
+    bin_range: [-500, 500]
+    # Size of the bins of the histogram
+    bin_size: 20
+    # Unit of the time values (s or ms)
+    data_unit: ms
+    # Value type of the histogram
+    #  - freq: mean frequency
+    #  - count: mean spike count
+    #  - prob: mean of th spike counts normalized to 1
+    value_unit: freq
+# Plot parameters
+plot:
+  # Thickness of the line representing the histogram
+  line_width: 2
+  # How the color for a spike type is selected from palette?
+  #  Possible values:
+  #   cell_type: colored by the cell's type
+  #   spike_type: colored by the spike's type
+  coloring_mode:
+    AIS-AP: cell_type
+    RA-AP: spike_type
+# Color palette
+palette:
+  cell_type:
+    PYR_L2-3: '#803300ff'
+    PYR_L4-6: '#502d16ff'
+    RSI_L2-3: '#ff48a3ff'
+    RSI_L4-6: '#800080ff'
+    FSI_L2-3: '#d54500ff'
+    FSI_L4-6: '#7a0000ff'
+  spike_type:
+    AIS-AP: "#0000ff"
+    UNKNOWN: "#adadad"
+    RA-AP: "#00ff00"
