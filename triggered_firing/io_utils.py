@@ -1,6 +1,7 @@
 
 from collections import namedtuple
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -21,7 +22,7 @@ def load_customized_config(name: str) -> dict:
         dict: Loaded configuration dictionary.
     """
     default_path = f'config_defaults/{name}.yaml'
-    custom_path = f'config{name}.yaml'
+    custom_path = f'config/{name}.yaml'
 
     config = {}
     if Path(default_path).exists():
@@ -38,10 +39,11 @@ def load_customized_config(name: str) -> dict:
     while stack:
         curr_config, curr_custom = stack.pop()
         for key, value in curr_custom.items():
-            if key not in curr_config:
-                curr_config[key] = value
-            elif isinstance(value, dict):
+            print(key, value)
+            if key in curr_config and isinstance(value, dict):
                 stack.append((curr_config[key], value))
+            else:
+                curr_config[key] = value
     return config
 
 def make_file_name(info: CellInfo, config: dict) -> str:
@@ -68,8 +70,8 @@ def need_to_skip(path: Path, config: dict) -> bool:
     """
     if config['mode'] == 'all':
         return (
-            path.name in config.get('skip_files', []) or
-            path.parent.name in config.get('skip_dirs', [])
+            path.name in (config.get('skip_files') or []) or
+            path.parent.name in (config.get('skip_dirs') or [])
         )
     if config['mode'] == 'directory':
         if 'select_dirs' not in config:
@@ -78,7 +80,7 @@ def need_to_skip(path: Path, config: dict) -> bool:
             )
         return (
             path.parent.name not in config['select_dirs'] or
-            (path.name in config.get('skip_files', []))
+            (path.name in (config.get('skip_files') or []))
         )
     if config['mode'] == 'file':
         if 'select_files' not in config:

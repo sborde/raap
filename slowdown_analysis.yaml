@@ -3,9 +3,9 @@ input:
   #  - recursive: recursively processes all files in each subdirectory
   #  - directory: processes all files found in the given directory
   #  - file: processes a single file of the given path
-  mode: directory
+  mode: recursive
   # Path of the input dir or the file (in case of type=file)
-  path: C:\Datasets\raap\InVivoJuxta\RSI_L2-3
+  path: C:\Datasets\raap\InVivoJuxta\
   # List of files to skip, leave empty if you want all files
   skip_files:
     # - file1.mat
@@ -17,7 +17,7 @@ input:
 # Ouptput parameters
 output:
   # Path to the output directory
-  path: C:\tmp\Bozso2025\PutRAAP\Results\IndividualSlowdownAnalysis
+  path: C:\tmp\Bozso2025\PutRAAP\Results\TriggeredFiringComparison\01_processed_data
   # List of output formats
   # - png: save figures as PNG files
   # - svg: save figures as SVG files

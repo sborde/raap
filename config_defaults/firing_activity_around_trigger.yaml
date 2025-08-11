@@ -2,13 +2,13 @@
 data:
   # Path to the raw data where files are grouped into subdirectories.
   raw_data:
-    path: C:\Datasets\raap\InVivoJuxta
+    path:
     extension: mat
   # Path to the processed_data directory with the same structure as raw_data.
   processed_data:
-    path: C:\tmp\Bozso2025\PutRAAP\Results\TriggeredFiringComparison\01_processed_data
+    path:
     extension: csv
-    suffix: spikes
+    suffix:
 # Input selection: what to process from the data folders?
 #  all: files in all directories with the given extension, skips the files 
 #    in the skip_files list and dirs in the skip_dirs list
@@ -38,11 +38,12 @@ input:
   mode: directory
   select_dirs:
     - RSI_L2-3
+    - FSI_L2-3
   skip_files:
 # Output directory where the figures and statistics directories will be created
 # It will follow the same structure as the input folders.
 output:
-  path: C:\tmp\Bozso2025\PutRAAP\Results\TriggeredFiringComparison\02_results
+  path:
 # Parameters for the analysis.
 params:
   # Name of the trigger
