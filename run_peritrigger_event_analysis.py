@@ -1,7 +1,6 @@
 
 
-from utils.file_utils import load_customized_config
-from triggered_firing.io_utils import list_input_files
+from triggered_firing.io_utils import list_input_files, load_customized_config
 from triggered_firing.runners import IndividualSpikeTypePTTHAnalysis
 
 CONFIG_NAME = 'firing_activity_around_trigger'
