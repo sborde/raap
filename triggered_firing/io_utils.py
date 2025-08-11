@@ -39,7 +39,6 @@ def load_customized_config(name: str) -> dict:
     while stack:
         curr_config, curr_custom = stack.pop()
         for key, value in curr_custom.items():
-            print(key, value)
             if key in curr_config and isinstance(value, dict):
                 stack.append((curr_config[key], value))
             else:

@@ -44,6 +44,10 @@ input:
 # It will follow the same structure as the input folders.
 output:
   path:
+# Path to the grouping Excel sheet
+grouping:
+  do: False
+  path: <path_to_grouping_directory>
 # Parameters for the analysis.
 params:
   # Name of the trigger

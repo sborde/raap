@@ -30,8 +30,14 @@ class IndividualSpikeTypePTTHAnalysis:
         self._plot = create_ptth_plotter(self._trigger, config['plot'])
 
         output_path = config['output']['path']
-        self._save_result = create_result_saver(output_path, self._trigger)
-        self._save_figure = create_figure_saver(output_path, self._trigger)
+        self._suffix = f'{self._trigger}_{self._calculate.value_unit}_histogram'
+        self._save_result = create_result_saver(output_path, self._suffix)
+        self._save_figure = create_figure_saver(output_path, self._suffix)
+
+    @property
+    def suffix(self):
+        """Returns the suffix for the output files."""
+        return self._suffix
 
     def __call__(self, input_file: CellWrapper[dict[str, Path]]):
 

@@ -44,6 +44,10 @@ input:
 # It will follow the same structure as the input folders.
 output:
   path: C:\tmp\Bozso2025\PutRAAP\Results\TriggeredFiringComparison\02_results
+# Path to the grouping Excel sheet
+grouping:
+  do: True
+  path: C:\tmp\Bozso2025\PutRAAP\Results\TriggeredFiringComparison\grouping_001.xlsx
 # Parameters for the analysis.
 params:
   # Name of the trigger
