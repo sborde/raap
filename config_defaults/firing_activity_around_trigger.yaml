@@ -56,12 +56,15 @@ params:
   spike_types:
     - AIS-AP
     - RA-AP
+  # Condition for trigger to include (considers only if appears)
+  trigger_condition:
+    - RA-AP
   # Parameters for the peri-trigger time histogram
   histogram:
     # Analysis window around the trigger
     bin_range: [-500, 500]
     # Size of the bins of the histogram
-    bin_size: 20
+    bin_size: 5
     # Unit of the time values (s or ms)
     data_unit: ms
     # Value type of the histogram

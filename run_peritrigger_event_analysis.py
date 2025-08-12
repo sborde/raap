@@ -14,15 +14,15 @@ if __name__ == "__main__":
     analysis = IndividualSpikeTypePTTHAnalysis(run_config)
 
     input_files = list_input_files(run_config['data'], run_config['input'])
-    # for input_file in input_files:
-    #     try:
-    #         print(f"Processing {input_file.name}...", end=" ")
-    #         analysis(input_file)
-    #         print("done.")
-    #     except Exception as e:
-    #         print(
-    #             f"Some error occurred during processing {input_file.name}: {e}"
-    #         )
+    for input_file in input_files:
+        try:
+            print(f"Processing {input_file.name}...", end=" ")
+            analysis(input_file)
+            print("done.")
+        except Exception as e:
+            print(
+                f"Some error occurred during processing {input_file.name}: {e}"
+            )
 
     if run_config['grouping']['do']:
         run_config['output']['suffix'] = analysis.suffix
