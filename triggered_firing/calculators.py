@@ -152,7 +152,8 @@ class HistogramCalculator:
             values = (values / self._bin_size) * self._data_multiplier
             value_unit = 'Hz'
         elif self._value_unit == 'prob':
-            values = values / values.sum()
+            if values.sum() > 0:
+                values = values / values.sum()
             value_unit = 'norm. count'
 
         return Histogram(
@@ -170,15 +171,13 @@ def calculate_ptth(
     """
     Calculate the peritrigger time-histogram for a set of triggers and events.
     """
-    histogram_values = [
-        calculator(events - trigger).values
-        for trigger in triggers
-    ]
+    histograms = [calculator(events - trigger) for trigger in triggers]
+    histogram_values = [hist.values for hist in histograms]
     return MultiTrialHistogram(
-        centers=calculator.centers,
+        centers=histograms[0].centers,
         values=np.stack(histogram_values, axis=1),
-        data_unit=calculator.data_unit,
-        value_unit=calculator.value_unit
+        data_unit=histograms[0].data_unit,
+        value_unit=histograms[0].value_unit
     )
 
 def calculate_ptth_for_events(
