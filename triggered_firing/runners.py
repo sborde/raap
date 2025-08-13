@@ -2,6 +2,7 @@
 from pathlib import Path
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 from common.data_utils import CellWrapper
 from signalizer.model.experiment.sequences import EventVector
@@ -46,6 +47,7 @@ class IndividualSpikeTypePTTHAnalysis:
     def __call__(self, input_file: CellWrapper[dict[str, Path]]):
 
         input_data = load_input_data(input_file)
+        all_triggers = input_data.recording.get_event(self._trigger)
         triggers = self._collect_triggers(input_data)
 
         results = calculate_ptth_for_spike_types(
@@ -58,6 +60,11 @@ class IndividualSpikeTypePTTHAnalysis:
         cell_result = CellWrapper(input_file.info, results)
         spike_palette = self._get_palette(input_file.info.cell_type)
         cell_figure = self._plot(cell_result, spike_palette)
+        plt.title(
+            f"{input_file.name}{self._trigger}" +
+            f"(n={len(triggers)}/{len(all_triggers)})"
+            "-triggered Histogram"
+        )
         self._save_result(cell_result)
         self._save_figure(cell_figure)
 

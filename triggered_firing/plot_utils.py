@@ -65,8 +65,8 @@ def make_ptth_figure(
             color=spike_palette[spike_type],
             linewidth=line_width
         )
-    ax.set_ylabel(make_ylabel(result.result.value_unit))
-    ax.set_xlabel(f"Time relative to trigger ({result.result.data_unit})")
+    ax.set_ylabel(make_ylabel(cell_results.data[0].result.value_unit))
+    ax.set_xlabel(f"Time relative to trigger ({cell_results.data[0].result.data_unit})")
     ax.set_title(f"{info.name}{trigger}-triggered Histogram")
     return CellWrapper(cell_results.info, fig)
 
