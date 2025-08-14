@@ -10,7 +10,7 @@ from triggered_firing.exporters import create_result_saver
 from triggered_firing.io_utils import RecordingSpikePair, load_input_data
 
 from .plot_utils import create_figure_saver, create_ptth_plotter, create_spike_palette_for_celltype
-from .calculators import HistogramCalculator, calculate_ptth_for_spike_types
+from .calculators import HistogramCalculator, MultiTrialHistogram, SpikeTypeResults, calculate_ptth_for_spike_types
 
 class IndividualSpikeTypePTTHAnalysis:
 
@@ -47,8 +47,8 @@ class IndividualSpikeTypePTTHAnalysis:
     def __call__(self, input_file: CellWrapper[dict[str, Path]]):
 
         input_data = load_input_data(input_file)
-        all_triggers = input_data.recording.get_event(self._trigger)
-        triggers = self._collect_triggers(input_data)
+        trigger_markers = input_data.recording.get_event(self._trigger)
+        triggers = np.array([marker.timestamp.time for marker in trigger_markers])
 
         results = calculate_ptth_for_spike_types(
             input_data.spike_data,
@@ -59,33 +59,50 @@ class IndividualSpikeTypePTTHAnalysis:
 
         cell_result = CellWrapper(input_file.info, results)
         spike_palette = self._get_palette(input_file.info.cell_type)
-        cell_figure = self._plot(cell_result, spike_palette)
+
+        result_to_plot = remove_zero_trials(
+            results,
+            self._trigger_condition
+        )
+        n_trials = results[0].result.n_trials
+        valid_trials = result_to_plot[0].result.n_trials
+
+        cell_figure = self._plot(CellWrapper(input_file.info, result_to_plot), spike_palette)
         plt.title(
-            f"{input_file.name}{self._trigger}" +
-            f"(n={len(triggers)}/{len(all_triggers)})"
-            "-triggered Histogram"
+            f"{input_file.name} {self._trigger} " +
+            f"(n={valid_trials}/{len(trigger_markers)})\n"
+            f"P({'&'.join(self._trigger_condition)})={valid_trials/n_trials:.4f}"
         )
         self._save_result(cell_result)
         self._save_figure(cell_figure)
 
-    def _collect_triggers(self, input_data: RecordingSpikePair) -> np.ndarray:
-        """Collects the triggers from the input data."""
-        spikes = input_data.spike_data
-        events: EventVector = input_data.recording.get_event(self._trigger)
-        triggers = np.array([trigger.timestamp.time for trigger in events])
-        if self._trigger_condition is None:
-            return triggers
-        selected_triggers = []
-        window_sec = self._window_size / 1000 if self._data_unit == 'ms' else self._window_size
-        for trigger in triggers:
-            triggered_window = window_sec + trigger
-            triggered_spikes = spikes[
-                (spikes['timestamp'] >= triggered_window[0]) &
-                (spikes['timestamp'] <= triggered_window[1])
-            ]
-            if all(
-                condition in triggered_spikes['spike_type'].unique()
-                for condition in self._trigger_condition
-            ):
-                selected_triggers.append(trigger)
-        return np.array(selected_triggers)
+def remove_zero_trials(
+    triggered_histograms: list[SpikeTypeResults],
+    trigger_condition: list[str]
+) -> list[SpikeTypeResults]:
+    """Collects the triggers from the input data."""
+
+    if trigger_condition is None:
+        return triggered_histograms
+
+    n_triggers = triggered_histograms[0].result.n_trials
+    keep_flags = np.ones(n_triggers, dtype=bool)
+    for type_result in triggered_histograms:
+        spike_type = type_result.spike_type
+        if spike_type not in trigger_condition:
+            continue
+        histogram = type_result.result
+        keep_flags &= np.sum(histogram.values, axis=0) > 0
+
+    return [
+        SpikeTypeResults(
+            spike_type=spike_type,
+            result=MultiTrialHistogram(
+                values=histogram.values[:, keep_flags],
+                centers=histogram.centers,
+                data_unit=histogram.data_unit,
+                value_unit=histogram.value_unit
+            )
+        )
+        for spike_type, histogram in triggered_histograms
+    ]

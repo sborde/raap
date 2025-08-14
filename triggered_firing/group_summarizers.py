@@ -93,16 +93,19 @@ def plot_grouped_result(aggregated_data: pd.DataFrame, config: dict) -> Figure:
         )
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    for _, group in aggregated_data.groupby('cell_name'):
-        sns.lineplot(
-            data=group,
-            x='centers',
-            y='mean',
-            hue='spike_type',
-            palette=palette,
-            alpha=0.5
-        )
-    spike_type_average = aggregated_data.groupby(by=['centers', 'spike_type'])['mean'].mean().reset_index()
+    if config['plot']['group']['superimposed']:
+        for _, group in aggregated_data.groupby('cell_name'):
+            sns.lineplot(
+                data=group,
+                x='centers',
+                y='mean',
+                hue='spike_type',
+                palette=palette,
+                alpha=0.5
+            )
+    spike_type_average = aggregated_data.groupby(
+        by=['centers', 'spike_type']
+    )['mean'].mean().reset_index()
     sns.lineplot(
         data=spike_type_average,
         x='centers',
@@ -147,6 +150,19 @@ def run_grouped_analysis(config: dict):
             load_cell_data(config['output'], member)
             for member in group['members']
         ]
+        n_trials_per_member = [member.data.shape[1] - 2 for member in group_data]
+
+        trigger_conditions = config['params']['trigger_condition']
+        if trigger_conditions:
+            group_data = [
+                validate_by_trigger_condition(member, trigger_conditions)
+                for member in group_data
+            ]
+        n_valid_trials_per_member = [member.data.shape[1] - 2 for member in group_data]
+        mean_prob = np.mean(
+            np.array(n_valid_trials_per_member) / np.array(n_trials_per_member)
+        )
+
         aggregated_data = aggregate_group(group_data)
         aggregated_data.to_csv(
             aggregated_dir /
@@ -159,6 +175,10 @@ def run_grouped_analysis(config: dict):
         )
 
         fig = plot_grouped_result(aggregated_data, config)
+        plt.title(
+            f"Mean activity around {config['params']['trigger']}\n" +
+            f"P({'&'.join(trigger_conditions)})={mean_prob:.4f}"
+        )
         fig.savefig(
             figure_dir /
             (
@@ -169,3 +189,28 @@ def run_grouped_analysis(config: dict):
             )
         )
         plt.close(fig)
+
+def validate_by_trigger_condition(
+    cell_data: CellWrapper[pd.DataFrame],
+    trigger_conditions: list[str]
+):
+    """Returns a data frame with columns that satisfy the trigger conditions."""
+    data_frame = cell_data.data
+    n_cols = data_frame.shape[1]
+    keep_flag = np.ones(n_cols, dtype=bool)
+    for i in  range(2, n_cols):
+        for condition in trigger_conditions:
+            if data_frame[data_frame['spike_type'] == condition].iloc[:, i].sum() == 0:
+                keep_flag[i] = False
+                break
+
+    print(
+        f"{cell_data.info.name} " +
+        f"all triggers: {n_cols - 2}, " +
+        f"valid triggers: {keep_flag[2:].sum()}"
+    )
+
+    return CellWrapper(
+        cell_data.info,
+        data_frame.loc[:, keep_flag]
+    )

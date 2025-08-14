@@ -25,5 +25,5 @@ if __name__ == "__main__":
             )
 
     if run_config['grouping']['do']:
-        run_config['output']['suffix'] = analysis.suffix
+        run_config['output']['suffix'] = analysis.suffix + '_histogram'
         run_grouped_analysis(run_config)

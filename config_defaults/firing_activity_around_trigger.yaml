@@ -83,6 +83,8 @@ plot:
   coloring_mode:
     AIS-AP: cell_type
     RA-AP: spike_type
+  group:
+    superimposed: True
 # Color palette
 palette:
   cell_type:
