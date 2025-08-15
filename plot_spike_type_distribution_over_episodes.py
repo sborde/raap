@@ -23,16 +23,25 @@ if __name__ == "__main__":
     spike_types = config['plot']['spike_types']
     figures_path = Path(config['output']['path'])
     input_dir = Path(config['input']['path'])
+
     for file_path in input_dir.glob('*_averages.csv'):
         cell_type = file_path.stem.replace('_averages', '')
         stats_df = pd.read_csv(file_path, index_col=None)
 
         for episode_group in config['plot']['episode_groups']:
+
+
+            parent = episode_group.get('parent', 'all')
+            group_df = stats_df.copy()
+            if parent != 'all':
+                group_df = group_df[group_df['episode'] == parent]
+
             episode_group_name = episode_group['name']
+
             episode_names = episode_group['episodes'] + ['none']
             fig, ax = plt.subplots(figsize=(7.5, 5))
             for i, spike_type in enumerate(spike_types):
-                spike_stats = stats_df[stats_df['spike_type'] == spike_type]
+                spike_stats = group_df[group_df['spike_type'] == spike_type]
                 bottom = 0
                 for j, episode_name in enumerate(episode_names):
                     episode_stats = spike_stats[spike_stats['episode'] == episode_name]

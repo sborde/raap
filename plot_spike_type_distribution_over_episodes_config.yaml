@@ -1,7 +1,7 @@
 input:
-  path: C:/tmp/Bozso2025/PutRAAP/Results/IndividualSlowdownAnalysis/03_results/Results
+  path: E:/Data/BogiSejtek/PutRAAP/Results/20250804/Preprocessed/RSI_L2-3
 output:
-  path: C:/tmp/Bozso2025/PutRAAP/Results/IndividualSlowdownAnalysis/03_results/Figures
+  path: E:/Data/BogiSejtek/PutRAAP/Results/20250804/
 plot:
   episode_groups:
     - name: sleep_stages
@@ -10,6 +10,7 @@ plot:
         - 'theta'
         - 'sw'
     - name: nrem
+      parent: sw
       episodes:
         - 'spdl'
         - 'delta'
