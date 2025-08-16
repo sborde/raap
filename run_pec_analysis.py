@@ -3,7 +3,7 @@ import pandas as pd
 
 from triggered_firing.io_utils import list_input_files, load_customized_config
 from phase_event_coupling.runners import IndividualSpikeTypePECAnalysis
-from triggered_firing.group_summarizers import run_grouped_analysis
+from phase_event_coupling.group_summarizers import run_grouped_analysis
 
 
 CONFIG_NAME = 'phase_event_coupling'
@@ -24,6 +24,6 @@ if __name__ == "__main__":
                 f"Some error occurred during processing {input_file.name}: {e}"
             )
 
-    # if run_config['grouping']['do']:
-    #     run_config['output']['suffix'] = analysis.suffix
-    #     run_grouped_analysis(run_config)
+    if run_config['grouping']['do']:
+        run_config['output']['suffix'] = analysis.suffix + '_histogram'
+        run_grouped_analysis(run_config)

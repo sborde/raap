@@ -46,7 +46,7 @@ output:
   path: C:\tmp\Bozso2025\PutRAAP\Results\TriggeredFiringComparison\02_results
 # Path to the grouping Excel sheet
 grouping:
-  do: False
+  do: True
   path: C:\tmp\Bozso2025\PutRAAP\Results\TriggeredFiringComparison\grouping_001.xlsx
 # Parameters for the analysis.
 params:
@@ -83,6 +83,8 @@ plot:
     AIS-AP: cell_type
     RA-AP: spike_type
     UNKNOWN: spike_type
+  group:
+    superimposed: True
 # Color palette
 palette:
   cell_type:
