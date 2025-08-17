@@ -1,0 +1,89 @@
+# Paths for the data files
+data:
+  # Path to the raw data where files are grouped into subdirectories.
+  raw_data:
+    path: [[path_to_raw_data]]
+    extension: mat
+  # Path to the processed_data directory with the same structure as raw_data.
+  processed_data:
+    path: [[processed_data_path]]
+    extension: csv
+    suffix:
+# Input selection: what to process from the data folders?
+#  all: files in all directories with the given extension, skips the files 
+#    in the skip_files list and dirs in the skip_dirs list
+# mode: all
+# skip_files:
+#   - file1.mat
+#   - file2.mat
+# skip_dirs:
+#   - dir1
+#   - dir2
+#  - all files in the directories specified in select_dirs list, without the
+#    files in the skip_files list. In this case, skip_dirs ignored.
+# mode: directory
+# select_dirs:
+#   - RSI_L2-3
+#   # - dir1
+#   # - dir2
+# skip_files:
+#   - file1.mat
+#   - file2.mat
+# mode: file
+#  - files in any of the subdirectories from the select_files
+# select_files:
+#   - file1.mat
+#   - file2.mat
+input:
+  mode: directory
+  select_dirs:
+    - FSI_L2-3
+    - RSI_L2-3
+  skip_files:
+# Output directory where the figures and statistics directories will be created
+# It will follow the same structure as the input folders.
+output:
+  path: [[output_dir_base_path]]
+# Path to the grouping Excel sheet
+grouping:
+  do: True
+  path: [[grouping_excel_path]]
+# Parameters for the analysis.
+params:
+  episode_groups:
+    - name: sleep_stages
+      episodes:
+        - 'sw'
+    - name: nrem
+      parent: sw
+      episodes:
+        - 'spdl'
+        - 'delta'
+  trigger_windows:
+    - name: delta_end
+      window: [-500, 500]
+      time_unit: ms
+  spike_types:
+    - 'AIS-AP'
+    - 'UNKNOWN'
+    - 'RA-AP'
+plot:
+  figsize: [10, 6]
+palette:
+  episode:
+    awake: '#0000ff'
+    theta: '#ff0000'
+    sw: '#00ff00'
+    spdl: "#ab0044"
+    delta: "#0099cc"
+    none: '#adadad'
+  trigger:
+    delta_end: "#0099cc"
+    none: '#adadad'
+  celltype:
+    PYR_L2-3: '#803300ff'
+    PYR_L4-6: '#502d16ff'
+    RSI_L2-3: '#ff48a3ff'
+    RSI_L4-6: '#800080ff'
+    FSI_L2-3: '#d54500ff'
+    FSI_L4-6: '#7a0000ff'
