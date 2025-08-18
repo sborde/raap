@@ -1,7 +1,6 @@
 
 
 
-from collections import namedtuple
 from typing import Optional, Self
 
 import numpy as np
