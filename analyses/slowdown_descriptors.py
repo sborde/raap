@@ -111,6 +111,12 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
             'smoothed_power': np.mean(v ** 2),
             'noise_power': np.mean((spike.values - v) ** 2)
         }
+    else:
+        noise_properties = {
+            'raw_power': np.nan,
+            'smoothed_power': np.nan,
+            'noise_power': np.nan
+        }
 
     peak_i = np.argmin(np.abs(spike.times - 0)).astype(int)
 
