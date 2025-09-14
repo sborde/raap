@@ -1,66 +1,60 @@
 """Module for HTML report generation utility functions."""
 
+import json
 from pathlib import Path
 
+from .file_io import load_textfile, save_textfile
 
-def load_textfile(path: Path) -> str:
-    """
-    Load a text file from the specified path.
-    
-    Args:
-        path (Path): Path to the text file.
 
-    Returns:
-        str: Content of the text file.
-    """
-    with open(path, 'r') as file:
-        return file.read()
+class TemplateFiller:
+    """Class for filling JSON templates with data."""
 
-def save_textfile(file_path: Path, content: str) -> None:
-    """
-    Save the given content to a text file at the specified path.
+    def __init__(self, template_path: str, output_path: str):
+        self._template_path = template_path
+        self._output_path = output_path
 
-    Args:
-        file_path (Path): Path where the text file will be saved.
-        content (str): Content to write into the text file.
-    """
-    with open(file_path, 'w') as file:
-        file.write(content)
+    def __call__(self, replacements: dict) -> None:
+        """
+        Fill the template with the provided replacements.
+        """
+        final_text = load_textfile(self._template_path)
+        for placeholder, value in replacements.items():
+            final_text = final_text.replace(f'[[{placeholder}]]', value)
+        save_textfile(self._output_path, final_text)
 
-def fill_template(template: str, replacements: dict) -> str:
-    """
-    Replace placeholders in the template with specified values from 
-    the replacements dictionary.
-    
-    Args:
-        template (str): The template string containing placeholders.
-        replacements (dict): A dictionary of placeholders and their replacements.
-    
-    Returns:
-        str: The template with placeholders replaced by their corresponding values.
-    """
-    for placeholder, value in replacements.items():
-        template = template.replace(f'[[{placeholder}]]', value)
-    return template
 
-def compose_textfile(
-    template_path: Path,
-    replacements: dict,
-    output_path: Path
-) -> None:
+class SimpleResultReportGenerator:
+    """Class for generating reports from figure dictionaries."""
+
+    def __init__(self, template_filler: TemplateFiller):
+        self._template_filler = template_filler
+
+    def __call__(self, figure_dicts: list[dict]) -> None:
+        """
+        Generate a report from the figure dictionaries.
+        """
+        json_string = json.dumps(
+            figure_dicts,
+            indent=4,
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(',', ': ')
+        )
+        self._template_filler({'result_list': json_string})
+
+def create_report_generator(config: dict) -> SimpleResultReportGenerator:
     """
-    Generate a text file by replacing placeholders in the template with 
-    specified values from the replacements dictionary and saves the result
-    to the output path.
-    
-    Args:
-        template_path (Path): The path to the text template file.
-        replacements (dict): A dictionary of placeholders and their replacements.
-        output_path (Path): The path where the generated text file will be saved.
+    Create a SimpleResultReportGenerator based on the provided configuration.
     """
-    template = load_textfile(template_path)
-    final_text = fill_template(template, replacements)
-    save_textfile(output_path, final_text)
+    template_path = f'html_templates/{config.get("template_name", "index")}.html'
+    report_path = (
+        Path(config['data']['features']['path']) /
+        '02_figures' /
+        'index.html'
+    ).as_posix()
+    return SimpleResultReportGenerator(
+        TemplateFiller(template_path, report_path)
+    )
 
 # def collect_group_results(
 #     group_path: Path,

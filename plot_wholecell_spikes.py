@@ -5,7 +5,7 @@ import seaborn as sns
 import pandas as pd
 import numpy as np
 
-from analyses.feature_based import find_start_index
+from raapy.workflows.processors.spike_transformers import find_start_index
 from analyses.preprocessing import prepare_data
 
 RAW_INPUT_BASE = Path('E:/Data/BogiSejtek/PutRAAP/20250701')

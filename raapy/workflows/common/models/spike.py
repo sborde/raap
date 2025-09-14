@@ -3,14 +3,15 @@ This module contains the classes for representing spike likes, spike shapes,
 and spike rising parts.
 """
 import abc
+
 from typing import Self
 from pathlib import Path
 
 import numpy as np
+
 from scipy.spatial.qhull import ConvexHull
 from scipy.signal import savgol_filter
 
-from data.series import SegmentMatrix, DataSeries, SeriesMatrix
 from signalizer.model.experiment.recordings import MatRecording
 from signalizer.processing.extractors import EventRelatedSegmentExtractor
 from signalizer.processing.factories import ProcessingSequence
@@ -20,6 +21,7 @@ from signalizer.processing.signalprocessing.resamplers import Resampler
 from signalizer.model.general.data import Interval
 from signalizer.model.temporal.data import TimeInterval
 
+from .series import SegmentMatrix, DataSeries, SeriesMatrix
 
 class SpikeLikes(abc.ABC):
     """
@@ -305,7 +307,7 @@ class SpikeShapes(SpikeLikes):
             )
             valid_timestamps.append(self.timestamps[i])
         
-        return SpikeShapes(
+        return type(self)(
             self.times,
             np.stack(normalized_values, axis=0),
             np.array(valid_timestamps),
@@ -316,7 +318,7 @@ class SpikeShapes(SpikeLikes):
         """
         Get the half spikes of the spike shapes.
         """
-        return SpikeShapes(
+        return type(self)(
             self.times[:self.peak+1],
             self.values[:, :self.peak+1],
             self.timestamps,
@@ -375,7 +377,7 @@ class SpikeShapes(SpikeLikes):
             for spike in self.values
         ])
 
-        return SpikeShapes(
+        return type(self)(
             self.times,
             filtered_values,
             self.timestamps,

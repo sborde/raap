@@ -1,14 +1,13 @@
 
 import abc
-from collections import namedtuple
-from typing import Optional, Protocol
+from typing import Protocol
 import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
-from common.data_utils import GroupWrapper
-from data.spikes import SpikePhase, SpikeShape
+from workflows.common.models.group import GroupWrapper
+from workflows.common.models.spike import SpikePhase, SpikeShape
 
 class PlottableSpike(Protocol):
     """A protocol for objects that can be plotted as spikes."""

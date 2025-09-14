@@ -1,43 +1,54 @@
+# Paths for the data files
+data:
+  # Path to the raw data where files are grouped into subdirectories.
+  raw_data:
+    path: C:\Datasets\raap\InVivoJuxta
+    extension: mat
+  # Path to the director containing the calculated spike features
+  features:
+    path: C:\tmp\Bozso2025\PutRAAP\results_refactor\spike_features\01_processed_data
+    extension: csv
+    suffix:
+palette:
+  PYR_L2-3: '#803300ff'
+  PYR_L4-6: '#502d16ff'
+  RSI_L2-3: '#ff48a3ff'
+  RSI_L4-6: '#800080ff'
+  FSI_L2-3: '#d54500ff'
+  FSI_L4-6: '#7a0000ff'
+# Input selection: what to process from the data folders?
+#  all: files in all directories with the given extension, skips the files 
+#    in the skip_files list and dirs in the skip_dirs list
+# mode: all
+# skip_files:
+#   - file1.mat
+#   - file2.mat
+# skip_dirs:
+#   - dir1
+#   - dir2
+#  - all files in the directories specified in select_dirs list, without the
+#    files in the skip_files list. In this case, skip_dirs ignored.
+# mode: directory
+# select_dirs:
+#   - RSI_L2-3
+#   # - dir1
+#   # - dir2
+# skip_files:
+#   - file1.mat
+#   - file2.mat
+# mode: file
+#  - files in any of the subdirectories from the select_files
+# select_files:
+#   - file1.mat
+#   - file2.mat
 input:
-  # Type of the input
-  #  - recursive: recursively processes all files in each subdirectory
-  #  - directory: processes all files found in the given directory
-  #  - file: processes a single file of the given path
-  mode: recursive
-  # Path of the input dir or the file (in case of type=file)
-  path: C:\Datasets\raap\InVivoJuxta\
-  # List of files to skip, leave empty if you want all files
+  mode: directory
+  select_dirs:
+    - RSI_L2-3
+    - FSI_L2-3
   skip_files:
-    # - file1.mat
-    # - file2.mat
-  # List of directories to skip, leave empty if you want all directories
-  skip_dirs:
-    # - dir1
-    # - dir2
-# Ouptput parameters
-output:
-  # Path to the output directory
-  path: C:\tmp\Bozso2025\PutRAAP\Results\TriggeredFiringComparison\01_processed_data
-  # List of output formats
-  # - png: save figures as PNG files
-  # - svg: save figures as SVG files
-  formats:
-    - png
-  # dpi of the output png (if png is set)
-  dpi: 100
-  suffixes:
-    # Suffixes of the output files' name
-    # - scatter: suffix for the scatter histogram
-    scatter: scatter
-    # - grouped: suffix for the grouped spike averages
-    category_averages: averages
-    # - piechart: suffix for the spike type pie chart
-    category_piechart: piechart
-    # - residual_histogram: suffix for the residual histogram
-    residual_histogram: residuals
-    valley_time_deviation:  valleys
 # Analysis parameters
-analysis:
+params:
   # Spike shape extractor parameters
   extractor:
     # name of the signal
@@ -81,11 +92,27 @@ analysis:
   classification:
     groups:
       - name: 'AIS-AP'
-      - name: 'UNKNOWN'
+      - name: 'UNDEFINED'
         bottom-left: [0, 0]
       - name: 'RA-AP'
         bottom-left: [0.01, 0.24]
 plot:
+  # Set True if you need svg besides png
+  make_svg: False
+  # dpi of the output png
+  dpi: 100
+  # Suffixes for each plot type; it is used by the report generator
+  suffixes:
+    # - scatter: suffix for the scatter histogram
+    scatter: scatter
+    # - grouped: suffix for the grouped spike averages
+    category_averages: averages
+    # - piechart: suffix for the spike type pie chart
+    category_piechart: piechart
+    # - residual_histogram: suffix for the residual histogram
+    residual_histogram: residuals
+    valley_time_deviation:  valleys
+  # Set True if you want to generate the given plot
   selector:
     scatter: True
     category_averages: True
@@ -141,10 +168,3 @@ plot:
     limits: [-1, 0]
     # Color of the histogram
     color: '#adadad'
-  palette:
-    PYR_L2-3: '#803300ff'
-    PYR_L4-6: '#502d16ff'
-    RSI_L2-3: '#ff48a3ff'
-    RSI_L4-6: '#800080ff'
-    FSI_L2-3: '#d54500ff'
-    FSI_L4-6: '#7a0000ff'

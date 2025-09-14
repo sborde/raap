@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from analyses.preprocessing import prepare_data
-from analyses.slowdown_descriptors import find_start_index
+from raapy.workflows.processors.spike_transformers import find_start_index
 
 TH_X = 0.01
 TH_Y = 0.24

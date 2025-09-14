@@ -9,7 +9,6 @@ from pathlib import Path
 import pandas as pd
 
 from common.data_utils import (
-    handle_output_dir,
     load_config
 )
 from analyses.slowdown_visualizers import visualize_slowdown_features
@@ -45,8 +44,6 @@ if __name__ == '__main__':
 
     analysis_config = load_config(args.analysis_config)
     input_config = load_config(args.input_config)
-
-    # analysis_config = handle_output_dir(analysis_config)
 
     datasets = collect_dataset(input_config)
 
