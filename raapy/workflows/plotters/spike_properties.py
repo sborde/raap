@@ -87,7 +87,7 @@ def make_scatter_histogram(
         x='x1',
         y='x2',
         size='ratio',
-        color=params['palette'][features.cell_type],
+        color=params['palette'][features.group],
         sizes=tuple(params['scatter']['point_sizes']),
         ax=ax
     )

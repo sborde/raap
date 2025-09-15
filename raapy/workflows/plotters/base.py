@@ -74,7 +74,7 @@ def save_figure(
         output_path (Path): The path where the figure will be saved.
     """
     output_path = Path(config['path'])
-    figure_dir = output_path / 'Figures' / cell_figure.cell_type
+    figure_dir = output_path / 'Figures' / cell_figure.group
     figure_dir.mkdir(parents=True, exist_ok=True)
 
     fig = cell_figure.data
