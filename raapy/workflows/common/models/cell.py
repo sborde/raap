@@ -10,19 +10,19 @@ class CellInfo:
     A class that holds information about a cell. Name of the cell and its
     type are mandatory.
     """
-    def __init__(self, name: str, cell_type: str):
+    def __init__(self, name: str, group: str):
         self._name = name
-        self._cell_type = cell_type
+        self._group = group
 
     @property
     def name(self) -> str:
-        """Get the name of the cell."""
+        """Returns the cell's name."""
         return self._name
 
     @property
-    def cell_type(self) -> str:
-        """Get the type of the cell."""
-        return self._cell_type
+    def group(self) -> str:
+        """Returns the cell's group."""
+        return self._group
 
 
 class CellWrapper[T]:
@@ -42,9 +42,9 @@ class CellWrapper[T]:
         return self._cell_info.name
 
     @property
-    def cell_type(self) -> str:
-        """Get the type of the cell."""
-        return self._cell_info.cell_type
+    def group(self) -> str:
+        """Get the group of the cell."""
+        return self._cell_info.group
 
     @property
     def data(self) -> T:
@@ -71,9 +71,9 @@ class CellPath:
         return self._info.name
 
     @property
-    def cell_type(self) -> str:
-        """Get the type of the cell."""
-        return self._info.cell_type
+    def group(self) -> str:
+        """Get the group of the cell."""
+        return self._info.group
 
     @property
     def path(self) -> Path:
