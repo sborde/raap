@@ -17,13 +17,19 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
+from pandas import DataFrame
 from matplotlib.figure import Figure
+from tqdm import tqdm
 
 from workflows.plotters.base import save_figure
 from workflows.plotters.spike_shapes import plot_grouped_spikes
 from workflows.processors.spike_transformers import create_transformer
-from workflows.common.data_io import enumerate_input_files
+from workflows.common.data_io import (
+    list_input_files,
+    make_grouped_path
+)
 from workflows.common.models.cell import (
+    CellInfo,
     CellWrapper
 )
 from workflows.common.models.spike import (
@@ -51,46 +57,125 @@ def run_slowdown_analysis(config: dict) -> None:
 
     report_generator = create_report_generator(config)
 
-    cells = enumerate_input_files(config)
+    cells = list_input_files(config)
     results = []
     for i, cell in enumerate(cells):
         print(f"Processing file {i+1}/{len(cells)}: {cell.name}")
-        results.append(analyze_cell(cell, config))
+        raw_path = make_grouped_path(cell, config['data']['raw_data'])
+        spike_shapes = load_spikes(cell, raw_path, config['params']['extractor'])
+        spike_features = describe_spikes(spike_shapes, config['params']['descriptor'])
+        spike_features = categorize_spikes(spike_features, config['params']['classification'])
+        results.append(plot_spike_properties(spike_features, config))
         report_generator(results)
 
-def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
+def load_spikes(cell: CellInfo, path: Path, params: dict) -> CellWrapper:
+    """Load spikes from the given cell path using the specified extractor.
+    Args:
+        cell_path (CellWrapper[Path]): The path to the cell data.
+        config (dict): Configuration dictionary containing extractor settings.
+    Returns:
+        CellWrapper[SpikeShapes]: A wrapper containing the loaded spike shapes.
+    """
+    spikes = load_spike_shapes(path, params)
+    return CellWrapper(cell, spikes)
+
+def describe_spikes(
+    spikes: CellWrapper[SpikeShapes],
+    config: dict
+) -> CellWrapper[pd.DataFrame]:
+    """
+    Describe the spikes using the given descriptor configuration.
+    """
+    features = [
+        calculate_rising_features(spike, config)
+        for spike in tqdm(spikes.data, desc=f'Describe spikes')
+    ]
+    features = [f for f in features if f is not None]
+
+    if len(features) < len(spikes.data):
+        n_errors = len(spikes.data) - len(features)
+        print(f"[INFO]: {n_errors} spike's start couldn't be detected.")
+
+    output_path = Path(config['output_dir'])
+    if config['single_spike_images']['do']:
+        debug_dir = output_path / 'Figures' / 'Individual'
+        if spikes.group is not None:
+            debug_dir = debug_dir / spikes.group
+        debug_dir = debug_dir / spikes.name
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        plot_features = features
+        if config['single_spike_images']['skip_zero']:
+            plot_features = [
+                f for f in features 
+                if (
+                    f['relative_dv_drop'] > 0 or
+                    f['relative_rebound_time'] > 0
+                )
+            ]
+        make_slowdown_debug_images(
+            plot_features,
+            debug_dir,
+            output_dpi=config['single_spike_images']['dpi']
+        )
+        print('Individual images created.')
+
+    feature_frame = convert_features_to_dataframe(features)
+
+    return CellWrapper[pd.DataFrame](spikes.info, feature_frame)
+
+def categorize_spikes(
+    cell_features: CellWrapper[DataFrame],
+    config: dict
+) -> CellWrapper[DataFrame]:
+    """ Categorize spikes based on the provided configuration.
+    Args:
+        cell_features (CellWrapper[DataFrame]): The features of the cell spikes.
+        config (dict): Configuration dictionary containing categorization settings.
+    Returns:
+        CellWrapper[DataFrame]: A DataFrame of spike features with category labels
+    """
+    features = cell_features.data.copy()
+    groups = config['groups']
+    features['spike_type'] = groups[0]['name']  # Default category
+    for group in groups[1:]:
+        bottom_left = group['bottom-left']
+        flags = []
+        for i, feature in enumerate(FEATURES):
+            flags.append(bottom_left[i] < features[feature['name']])
+        flag = np.logical_and.reduce(flags)
+        features.loc[flag, 'spike_type'] = group['name']
+    features['spike_type'] = features['spike_type'].fillna('other')
+    return CellWrapper[pd.DataFrame](cell_features.info, features)
+
+def plot_spike_properties(
+    properties: CellWrapper[DataFrame],
+    config: dict
+) -> dict:
     """Describe spikes for a cell spread across multiple files."""
 
     cell_results = {
-        'name': cell_path.name,
-        'type': cell_path.cell_type,
+        'name': properties.name,
+        'type': properties.group,
         'images': []
     }
-
-    # Load spike shapes
-    cell_spikes = load_spikes(cell_path, config['analysis']['extractor'])
-    # Calculate features
-    cell_features = describe_spikes(cell_spikes, config['analysis']['descriptor'])
-    # Categorize spikes
-    cell_features = categorize_spikes(cell_features, config['analysis']['classification'])
 
     # Save features
     output_path = (
         Path(config['output']['path']) /
         'Preprocessed' /
-        cell_path.cell_type
+        properties.group
     )
     output_path.mkdir(parents=True, exist_ok=True)
-    cell_features.data.to_csv(output_path / f'{cell_path.name}.csv', index=False)
+    properties.data.to_csv(output_path / f'{properties.name}.csv', index=False)
 
     # Do plots
     suffixes = config['output']['suffixes']
-    cell_type_color = config['plot']['palette'][cell_features.cell_type]
+    cell_type_color = config['plot']['palette'][properties.group]
 
     if config['plot']['selector']['residual_histogram']:
         # Create histogram of noise powers
         cell_figure = make_residual_histogram(
-            cell_features,
+            properties,
             config['plot']['residual_histogram']
         )
         figure_path = save_figure(cell_figure, suffixes['residual_histogram'], config['output'])
@@ -102,7 +187,7 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
     if config['plot']['selector']['scatter']:
         # Create scatter histogram
         cell_figure = make_scatter_histogram(
-            cell_features,
+            properties,
             FEATURES,
             config['plot'],
             tuple(config['analysis']['classification']['groups'][-1]['bottom-left']))
@@ -130,7 +215,7 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
             'RA-AP': '//',
             'UNKNOWN': None
         }
-        cell_figure = make_spike_type_piechart(cell_features, piechart_config)
+        cell_figure = make_spike_type_piechart(properties, piechart_config)
         figure_path = save_figure(cell_figure, suffixes['category_piechart'], config['output'])
         cell_results['images'].append({
             'path': figure_path,
@@ -152,7 +237,7 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
 
         cell_figure = create_grouped_average_plot(
             cell_spikes,
-            cell_features.data,
+            properties.data,
             average_plot_config
         )
         figure_path = save_figure(cell_figure, suffixes['category_averages'], config['output'])
@@ -164,7 +249,7 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
     if config['plot']['selector']['valley_time_deviation']:
         # Create histogram of valley times
         cell_figure = make_valley_time_deviation_histogram(
-            cell_features,
+            properties,
             config['plot']['valley_time_deviation']
         )
         figure_path = save_figure(cell_figure, suffixes['valley_time_deviation'], config['output'])
@@ -174,93 +259,6 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
         })
 
     return cell_results
-
-def load_spikes(
-    cell_path: CellWrapper[Path],
-    config: dict
-) -> CellWrapper[SpikeShapes]:
-    """Load spikes from the given cell path using the specified extractor.
-    Args:
-        cell_path (CellWrapper[Path]): The path to the cell data.
-        config (dict): Configuration dictionary containing extractor settings.
-    Returns:
-        CellWrapper[SpikeShapes]: A wrapper containing the loaded spike shapes.
-    """
-    spikes = load_spike_shapes(cell_path.data, config)
-    return CellWrapper[SpikeShapes](cell_path.info, spikes)
-
-def describe_spikes(
-    cell_spikes: CellWrapper[SpikeShapes],
-    config: dict
-) -> CellWrapper[pd.DataFrame]:
-    """
-    Describe the spikes using the given descriptor configuration.
-    """
-
-    spikes = cell_spikes.data
-    def describe(i, spike):
-        """Describe a single spike."""
-        print(f'Processing spike {i+1}/{len(spikes)}...', end='\r')
-        return calculate_rising_features(spike, config)
-
-    features = [describe(i, spike) for i, spike in enumerate(spikes)]
-    features = [f for f in features if f is not None]
-    print()
-
-    if len(features) < len(spikes):
-        n_errors = len(spikes) - len(features)
-        print(f'[INFO]: {n_errors} spike\'s start couldn\'t be detected.')
-
-    output_path = Path(config['output_dir'])
-    if config['single_spike_images']['do']:
-        debug_dir = output_path / 'Figures' / 'Individual'
-        if cell_spikes.cell_type is not None:
-            debug_dir = debug_dir / cell_spikes.cell_type
-        debug_dir = debug_dir / cell_spikes.name
-        debug_dir.mkdir(parents=True, exist_ok=True)
-        plot_features = features
-        if config['single_spike_images']['skip_zero']:
-            plot_features = [
-                f for f in features 
-                if (
-                    f['relative_dv_drop'] > 0 or
-                    f['relative_rebound_time'] > 0
-                )
-            ]
-        make_slowdown_debug_images(
-            plot_features,
-            debug_dir,
-            output_dpi=config['single_spike_images']['dpi']
-        )
-        print('Individual images created.')
-
-    feature_frame = convert_features_to_dataframe(features)
-
-    return CellWrapper[pd.DataFrame](cell_spikes.info, feature_frame)
-
-def categorize_spikes(
-    cell_features: CellWrapper[pd.DataFrame],
-    config: dict
-) -> CellWrapper[pd.DataFrame]:
-    """ Categorize spikes based on the provided configuration.
-    Args:
-        cell_features (CellWrapper[pd.DataFrame]): The features of the cell spikes.
-        config (dict): Configuration dictionary containing categorization settings.
-    Returns:
-        CellWrapper[pd.DataFrame]: A DataFrame of spike features with category labels
-    """
-    features = cell_features.data.copy()
-    groups = config['groups']
-    features['spike_type'] = groups[0]['name']  # Default category
-    for group in groups[1:]:
-        bottom_left = group['bottom-left']
-        flags = []
-        for i, feature in enumerate(FEATURES):
-            flags.append(bottom_left[i] < features[feature['name']])
-        flag = np.logical_and.reduce(flags)
-        features.loc[flag, 'spike_type'] = group['name']
-    features['spike_type'] = features['spike_type'].fillna('other')
-    return CellWrapper[pd.DataFrame](cell_features.info, features)
 
 def create_grouped_average_plot(
     spike_shapes: CellWrapper[SpikeShapes],
@@ -274,9 +272,7 @@ def create_grouped_average_plot(
         form_group(spike_shapes, grouping_vector, group_name)
         for group_name in plot_config['group_order']
     ]
-
     fig = plot_grouped_spikes(groups, plot_config)
-
     return CellWrapper[Figure](spike_shapes.info, fig)
 
 def form_group(
@@ -295,9 +291,7 @@ def form_group(
     for ts in member_timestamps:
         actual_index = np.argmin(np.abs(timestamps - ts)).astype(int)
         members.append(spike_shapes.data[actual_index])
-
-    info = GroupInfo(name)
-    return GroupWrapper[SpikeShape](info, members)
+    return GroupWrapper[SpikeShape](GroupInfo(name), members)
 
 
 # def describe_spikes_per_cell(cell_data: tuple[str, list[PathEntry]], config: dict) -> None:
