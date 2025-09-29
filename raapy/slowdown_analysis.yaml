@@ -6,16 +6,11 @@ data:
     extension: mat
   # Path to the director containing the calculated spike features
   features:
-    path: C:\tmp\Bozso2025\PutRAAP\results_refactor\spike_features\01_processed_data
+    path: C:\tmp\Bozso2025\PutRAAP\results_refactor\spike_features
     extension: csv
     suffix:
-palette:
-  PYR_L2-3: '#803300ff'
-  PYR_L4-6: '#502d16ff'
-  RSI_L2-3: '#ff48a3ff'
-  RSI_L4-6: '#800080ff'
-  FSI_L2-3: '#d54500ff'
-  FSI_L4-6: '#7a0000ff'
+  figures:
+    path: C:\tmp\Bozso2025\PutRAAP\results_refactor\spike_features
 # Input selection: what to process from the data folders?
 #  all: files in all directories with the given extension, skips the files 
 #    in the skip_files list and dirs in the skip_dirs list
@@ -67,90 +62,68 @@ params:
       polyorder: 3
     # dV threshold to detect spike start as a proportion of the max dV
     start_threshold: 0.1
-    # Where to begin the description
-    #  start: begin at the spike start
-    #  time: begin after a given time after start proportional to the risetime
-    #  amplitude: begin where the amplitude reaches the given proportion
-    search_start:
-      mode: 'time'
-      param:
-        threshold: 0.15
-    # Where to end the description
-    #  peak: stop at the spike peak
-    #  dv_max: stop at the maximum dV
-    #  time: stop with a given time before the peak proportional to the risetime
-    search_end:
-      mode: 'time'
-      param:
-        threshold: 0.15
-  # 2D-threshold based classification group parameters. The groups must be 
+    # Parameters to determine the part of the spike to search for local peaks
+    search_interval:
+      # Where to begin the description
+      #  start: begin at the spike start
+      #  time: begin after a given time after start proportional to the risetime
+      #  amplitude: begin where the amplitude reaches the given proportion
+      start:
+        mode: 'time'
+        param:
+          ratio: 0.15
+      # Where to end the description
+      #  peak: stop at the spike peak
+      #  dv_max: stop at the maximum dV
+      #  time: stop with a given time before the peak proportional to the risetime
+      end:
+        mode: 'time'
+        param:
+          ratio: 0.15
+    single_spike_images:
+      do: 0
+      # Number of random spikes to plot per cell
+      show: detected
+      # Figure size in inches
+      axis_size: [5, 5]
+  # 2D-threshold based categorization group parameters. The groups must be 
   # enumerated in a list. Each group is defined by the bottom-left corner of 
   # its area. The groups must be enumerated in an increasing order, starting 
   # from the leftmost-lowest group (the default group). The first is considered
   # as the default group, which is used for the points that are not in any
   # other group, so it's no need to set its bottom-left corner.
-  classification:
+  categorization:
+    features:
+      - relative_dv_drop
+      - relative_rebound_time
     groups:
       - name: 'AIS-AP'
       - name: 'UNDEFINED'
         bottom-left: [0, 0]
       - name: 'RA-AP'
         bottom-left: [0.01, 0.24]
+  plot:
+    selector:
+      residual_histogram: 1
+      scatter: 1
+      category_averages: 1
+      category_piechart: 1
+      valley_time_deviation: 1
 plot:
-  # Set True if you need svg besides png
-  make_svg: False
-  # dpi of the output png
-  dpi: 100
-  # Suffixes for each plot type; it is used by the report generator
-  suffixes:
-    # - scatter: suffix for the scatter histogram
-    scatter: scatter
-    # - grouped: suffix for the grouped spike averages
-    category_averages: averages
-    # - piechart: suffix for the spike type pie chart
-    category_piechart: piechart
-    # - residual_histogram: suffix for the residual histogram
-    residual_histogram: residuals
-    valley_time_deviation:  valleys
-  # Set True if you want to generate the given plot
-  selector:
-    scatter: True
-    category_averages: True
-    category_piechart: True
-    residual_histogram: True
-    valley_time_deviation: True
-  scatter:
-    # Figure size in inches
-    axis_size: [5, 5]
-    # Bin size for the 2D histogram-like scatter plot
-    bin_size: 0.005
-    # Point sizes for the scatter plot, each point is interpolated between them
-    point_sizes: [10, 1000]
-    axis_limits:
-      x: [0.0, 0.6]
-      y: [0.0, 0.8]
-  category_averages:
-    # Size of one Axis on the figure, the full size will be calculated
-    axis_size: [5, 2.5]
-    xlim: [-1, 2]
-    # Plotting mode for the average shape
-    #   raw: plot and average spikes as they are
-    #   align: set each spike's start to 0
-    #   normalize: normalize spikes start-to-peak
-    mode: raw
-    average:
-      linewidth: 2
-      alpha: 1
-    superimposed:
-      linewidth: 1
-      alpha: 0.5
-      color: "#adadad"
-    # Time window for the average shape in seconds
-    time_window: [-0.001, 0.002]
-  category_piechart:
-    # Size of the axis
-    axis_size: [5, 5]
+  palette:
+    PYR_L2-3: '#803300ff'
+    PYR_L4-6: '#502d16ff'
+    RSI_L2-3: '#ff48a3ff'
+    RSI_L4-6: '#800080ff'
+    FSI_L2-3: '#d54500ff'
+    FSI_L4-6: '#7a0000ff'
+  global:
+    # Set True if you need svg besides png
+    make_svg: False
+    # dpi of the output png
+    dpi: 100
   residual_histogram:
+    suffix: residuals
     # Size of the axis
     axis_size: [5, 5]
     # Number of bins for the histogram
@@ -159,7 +132,27 @@ plot:
     limits: [0, 100]
     # Color of the histogram
     color: '#adadad'
+    # Transparency of the histogram
+    alpha: 0.7
+  scatter:
+    suffix: scatter
+    # Figure size in inches
+    axis_size: [5, 5]
+    # Bin size for the 2D histogram-like scatter plot
+    histogram:
+      bin_size: 0.005
+    # Point sizes for the scatter plot, each point is interpolated between them
+    point_sizes: [10, 1000]
+    threshold: [0.02, 0.2]
+    axis:
+      x:
+        limits: [0.0, 0.6]
+        label: 'relative dV drop'
+      y:
+        limits: [0.0, 0.8]
+        label: 'relative rebound time'
   valley_time_deviation:
+    suffix: valleys
     # Size of the axis
     axis_size: [5, 5]
     # Number of bins for the histogram
@@ -168,3 +161,49 @@ plot:
     limits: [-1, 0]
     # Color of the histogram
     color: '#adadad'
+    # Transparency of the histogram
+    alpha: 0.7
+    axis:
+      x:
+        label: 'Valley time (ms)'
+  category_piechart:
+    suffix: piechart
+    # Size of the axis
+    axis_size: [5, 5]
+    styles:
+      - group: AIS-AP
+        edge_color: cell_type
+        fill_color: cell_type
+        pattern:
+      - group: UNDEFINED
+        edge_color: '#d0d0d0'
+        fill_color: '#d0d0d0'
+        pattern:
+      - group: RA-AP
+        edge_color: cell_type
+        fill_color: '#ffffff'
+        pattern: '//'
+  category_averages:
+    suffix: averages
+    # Size of one Axis on the figure, the full size will be calculated
+    axis_size: [5, 2.5]
+    xlim: [-1, 2]
+    plot_order:
+      - AIS-AP
+      - UNDEFINED
+      - RA-AP
+    # Plotting mode for the average shape
+    #   raw: plot and average spikes as they are
+    #   align: set each spike's start to 0
+    #   normalize: normalize spikes start-to-peak
+    mode: align
+    average:
+      linewidth: 2
+      alpha: 1
+      color: cell_type
+    superimposed:
+      linewidth: 1
+      alpha: 0.5
+      color: "#adadad"
+    # Time window for the average shape in seconds
+    time_window: [-0.001, 0.002]

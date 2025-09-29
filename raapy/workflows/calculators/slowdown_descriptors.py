@@ -1,128 +1,307 @@
 """Functions to calculate rising phase features of individual spikes."""
 
+from typing import Optional, Self
 import numpy as np
-import pandas as pd
 
 from scipy.signal import savgol_filter, find_peaks
 
-from workflows.common.models.spike import SpikeShape
+from workflows.common.models.spike import PlottableSpike, SpikeDerivative, SpikePhase, SpikeShape
 from workflows.processors.spike_transformers import find_start_index
 
-FEATURE_PROPERTIES = [
-    {
-        'name': 'relative_dv_drop',
-        'label': 'Relative dV drop'
-    },
-    {
-        'name': 'relative_rebound_time',
-        'label': 'Relative rebound time'
-    }
-]
 
-def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
+class SignalInterval:
+    """
+    A class to hold the start and end indices of a signal interval
+    alongside with the sampling interval (dt).
+    """
+
+    def __init__(self, left_i: int, right_i: int, dt: float):
+        self._left_i = int(left_i)
+        self._right_i = int(right_i)
+        self._dt = float(dt)
+
+    @property
+    def left_i(self) -> int:
+        """The left index of the signal interval."""
+        return self._left_i
+
+    @property
+    def right_i(self) -> int:
+        """The right index of the signal interval."""
+        return self._right_i
+
+    @property
+    def dt(self) -> float:
+        """The sampling interval (dt) of the signal."""
+        return self._dt
+
+    @property
+    def duration(self) -> float:
+        """The duration of the signal interval."""
+        return (self._right_i - self._left_i) * self._dt
+
+    def is_within(self, index: int) -> bool:
+        """Checks if the given index is within the signal interval."""
+        return self._left_i <= index <= self._right_i
+
+    def as_list(self) -> list[int]:
+        return [self._left_i, self._right_i]
+
+
+class NoiseProperties:
+    """A class to hold the noise properties of a spike shape."""
+
+    def __init__(
+        self,
+        raw: float = np.nan,
+        smoothed: float = np.nan,
+        noise: float = np.nan
+    ):
+        self._raw = raw
+        self._smoothed = smoothed
+        self._noise = noise
+
+    @property
+    def raw(self) -> float:
+        """The power of the raw signal."""
+        return self._raw
+
+    @property
+    def smoothed(self) -> float:
+        """The power of the smoothed signal."""
+        return self._smoothed
+
+    @property
+    def noise(self) -> float:
+        """The power of the noise signal."""
+        return self._noise
+
+    def as_dict(self) -> dict:
+        return {
+            'raw_power': self._raw,
+            'smoothed_power': self._smoothed,
+            'noise_power': self._noise
+        }
+
+
+class LocalPeakFeatures:
+    """A class to hold the features of a local peak in the spike derivative."""
+    def __init__(self):
+        self.dv_drop: float = np.nan
+        self.rebound_time: float = np.nan
+        self.relative_dv_drop: float = np.nan
+        self.relative_rebound_time: float = np.nan
+
+        self.left_peak: Optional[int] = None
+        self.right_peak: Optional[int] = None
+        self.dv_min_peak: Optional[float] = None
+
+        self.valley_i: Optional[int] = None
+        self.rebound_left_i: Optional[int] = None
+        self.rebound_right_i: Optional[int] = None
+
+    def as_dict(self) -> dict:
+        return {
+            'dv_drop': self.dv_drop,
+            'rebound_time': self.rebound_time,
+            'relative_dv_drop': self.relative_dv_drop,
+            'relative_rebound_time': self.relative_rebound_time,
+            'left_peak': self.left_peak,
+            'right_peak': self.right_peak,
+            'dv_min_peak': self.dv_min_peak,
+            'valley_i': self.valley_i,
+            'rebound_i': [self.rebound_left_i, self.rebound_right_i]
+        }
+
+
+class DescribedSpikeShape(PlottableSpike):
+    """A class to hold the features of a spike shape."""
+
+    def __init__(
+        self,
+        spike: SpikeShape,
+        start_i: int,
+        search_interval: SignalInterval,
+        noise_properties: Optional[NoiseProperties] = None,
+        slowdown_features: Optional[LocalPeakFeatures] = None
+    ):
+        self._spike = spike
+
+        self._start_i = start_i
+        self._peak_i = spike.peak_i
+
+        self._search_interval = search_interval
+        self.noise_properties = noise_properties or NoiseProperties()
+        self._slowdown_features = slowdown_features
+        self.category: Optional[str] = None
+
+    def __getattr__(self, name: str):
+        if name in self.as_dict():
+            return self.as_dict()[name]
+        raise AttributeError(f"'DescribedSpikeShape' object has no attribute '{name}'")
+
+    @property
+    def spike(self) -> SpikeShape:
+        """The spike shape."""
+        return self._spike
+
+    @property
+    def times(self) -> np.ndarray:
+        """
+        Get the times of the spike shape.
+        """
+        return self._spike.times
+
+    @property
+    def values(self) -> np.ndarray:
+        """
+        Get the values of the spike shape.
+        """
+        return self._spike.values
+
+    @property
+    def timestamp(self) -> float:
+        """
+        Get the timestamp of the spike shape.
+        """
+        return float(self._spike.timestamp)
+
+    @property
+    def dt(self) -> float:
+        """
+        Get the time step of the spike shape.
+        """
+        return self._spike.dt
+
+    @property
+    def derivative(self) -> SpikeDerivative:
+        """The derivative of the spike shape."""
+        return self._spike.get_derivative()
+
+    @property
+    def spike_phase(self) -> SpikePhase:
+        """The phase of the spike shape."""
+        return self._spike.get_phase()
+
+    @property
+    def start_i(self) -> int:
+        """The start index of the spike rising phase."""
+        return self._start_i
+
+    @property
+    def peak_i(self) -> int:
+        """The time of the spike peak."""
+        return self._peak_i
+
+    @property
+    def search_interval(self) -> SignalInterval:
+        """The search interval for the rising phase features."""
+        return self._search_interval
+
+    @property
+    def slowdown_features(self) -> LocalPeakFeatures:
+        """The features of the local peak in the spike derivative."""
+        if self._slowdown_features is None:
+            raise ValueError('Slowdown features have not been calculated.')
+        return self._slowdown_features
+
+    @property
+    def valley_time(self) -> float:
+        """The time of the valley between the peaks."""
+        if self.slowdown_features is None or self.slowdown_features.valley_i is None:
+            return np.nan
+        return float(self._spike.times[self.slowdown_features.valley_i])
+
+    def get_phase(self) -> SpikePhase:
+        """Get the phase of the spike shape."""
+        return self._spike.get_phase()
+
+    def with_slowdown_features(self, slowdown_features: LocalPeakFeatures) -> Self:
+        """Returns a copy of the spike shape with the calculated slowdown features."""
+        return type(self)(
+            self._spike,
+            self._start_i,
+            self._search_interval,
+            self.noise_properties,
+            slowdown_features
+        )
+
+    def as_dict(self) -> dict:
+        """Convert the features to a dictionary."""
+        return {
+            'timestamp': self.timestamp,
+            'raw_power': self.noise_properties.raw,
+            'noise_power': self.noise_properties.noise,
+            'start_i': self.start_i,
+            'peak_i': self.peak_i,
+            'search_interval': self._search_interval.as_list(),
+            **(self.slowdown_features.as_dict() if self.slowdown_features else {}),
+            'valley_time': self.valley_time
+        }
+
+def find_search_interval(
+    spike: SpikeShape,
+    start_i: int,
+    params: dict
+) -> SignalInterval:
+    """
+    Find the search interval for the rising phase features of a spike.
+    """
+    search_start_i = find_search_start(spike, start_i, params['start'])
+    search_end_i = find_search_end(spike, start_i, params['end'])
+    return SignalInterval(search_start_i, search_end_i, spike.dt)
+
+def calculate_rising_features(spike: SpikeShape, params: dict) -> Optional[DescribedSpikeShape]:
     """
     Calculate the features of the spike rising phase.
     """
-
-    spike_peak_index = np.argmin(np.abs(spike.times - 0)).astype(int)
-    start_i = find_start_index(spike.values[:spike_peak_index + 1], params)
+    start_i = find_start_index(spike.values[:spike.peak_i + 1], params)
 
     # if the start cannot be detected, return None
     if start_i is None:
         return None
 
-    noise_properties = {}
-    v = spike.values
     if 'smooth' in params and params['smooth']:
-        v = savgol_filter(v, **params['smooth'])
+        smoothed = smooth_spike(spike, params['smooth'])
+        noise_properties = calculate_noise_properties(spike, smoothed)
+        spike = smoothed
 
-        noise_properties = {
-            'raw_power': np.mean(spike.values ** 2),
-            'smoothed_power': np.mean(v ** 2),
-            'noise_power': np.mean((spike.values - v) ** 2)
-        }
-    else:
-        noise_properties = {
-            'raw_power': np.nan,
-            'smoothed_power': np.nan,
-            'noise_power': np.nan
-        }
-
-    peak_i = np.argmin(np.abs(spike.times - 0)).astype(int)
-
-    # search on the rising phase by default
-    search_start_i = start_i
-    # else on the rising phase from the given proportion of the amplitude
-    if params['search_start']['mode'] == 'amplitude':
-        search_start_i = find_rise_start_index(
-            v,
-            start_i,
-            peak_i,
-            params['search_start']['param']['threshold']
-        )
-    elif params['search_start']['mode'] == 'time':
-        rising_sample_count = peak_i - start_i
-        search_start_i = np.round(
-            rising_sample_count * params['search_start']['param']['threshold']
-        ).astype(int) + start_i
-
-    # Find the peaks of the first derivative
-    dv = np.diff(v)
-    # search until the peak by default
-    search_end_i = peak_i
-    # else until the global maximum of the first derivative
-    if params['search_end']['mode'] == 'dv_max':
-        search_end_i = np.argmax(dv)
-    elif params['search_end']['mode'] == 'time':
-        rising_sample_count = peak_i - start_i
-        search_end_i = peak_i - np.round(
-            rising_sample_count * params['search_end']['param']['threshold']
-        ).astype(int)
-
+    search_interval = find_search_interval(spike, start_i, params['search_interval'])
+    features = DescribedSpikeShape(
+        spike,
+        int(start_i),
+        search_interval,
+        noise_properties
+    )
 
     # Calculate the rising phase duration
     dt = np.mean(np.diff(spike.times))
-    rising_duration = (search_end_i - search_start_i) * dt
 
-    # find peaks and keep only the valid ones
-    peaks, _ = find_peaks(dv, prominence=(None, None))
-    peaks = [peak for peak in peaks if search_start_i <= peak <= search_end_i]
+    peaks = find_dv_peaks(spike, search_interval)
 
     # if there are no secondary peaks, return default values
     if len(peaks) < 2:
-        return {
-            'timestamp': spike.timestamp,
-            'relative_dv_drop': 0,
-            'relative_rebound_time': 0,
-            't': spike.times,
-            'v': v,
-            'dv': dv,
-            'start_i': start_i,
-            'search_start_i': search_start_i,
-            'search_end_i': search_end_i,
-            'left_peak': None,
-            'right_peak': None,
-            'valley_i': None,
-            'rebound_i': [],
-            'rebound_time': None,
-            'dv_min_peak': None
-        } | noise_properties
+        slowdown_features = LocalPeakFeatures()
+        slowdown_features.relative_dv_drop = 0
+        slowdown_features.relative_rebound_time = 0
+        return features.with_slowdown_features(slowdown_features)
 
-    features = []
-    dv_max_i = np.argmax(dv[:peak_i])
-    for peak in peaks:
-        if peak == dv_max_i:
-            # skip the global maximum peak
+    v = spike.values
+    peak_i = spike.peak_i
+
+    derivative = spike.get_derivative()
+    local_features: list[LocalPeakFeatures] = []
+    global_peak = np.argmax(derivative.dv[:peak_i]).astype(int)
+    for local_peak in peaks:
+        if local_peak == global_peak:
             continue
 
-        left_peak, right_peak = (
-            (peak, dv_max_i) if peak < dv_max_i else (dv_max_i, peak)
-        )
-        dv_interpeak = dv[left_peak:right_peak + 1]
+        left_peak, right_peak = tuple(sorted([local_peak, global_peak]))
+        dv_interpeak = derivative.dv[left_peak:right_peak + 1]
         dv_min_peak = min(dv_interpeak[0], dv_interpeak[-1])
 
         # Find the valley between the peaks
-        dv_valley_i = np.argmin(dv_interpeak)
+        dv_valley_i = np.argmin(dv_interpeak).astype(int)
         dv_valley = dv_interpeak[dv_valley_i]
 
         # Calculate the relative drop in dv
@@ -148,31 +327,91 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
             )
             rebound_time += (1 - alpha) * dt
 
-        features.append({
-            'timestamp': spike.timestamp,
-            'dv_drop': dv_drop,
-            'relative_dv_drop': dv_drop / dv[dv_max_i],
-            'relative_rebound_time': rebound_time / rising_duration,
-            't': spike.times,
-            'v': v,
-            'dv': dv,
-            'start_i': start_i,
-            'search_start_i': search_start_i,
-            'search_end_i': search_end_i,
-            'left_peak': left_peak,
-            'right_peak': right_peak,
-            'valley_i': dv_valley_i + left_peak,
-            'rebound_i': [left_level_i + left_peak, right_level_i + left_peak],
-            'rebound_time': rebound_time,
-            'dv_min_peak': dv_min_peak
-        } | noise_properties)
+        slowdown_features = LocalPeakFeatures()
+        slowdown_features.dv_drop = float(dv_drop)
+        slowdown_features.rebound_time = float(rebound_time)
+        slowdown_features.relative_dv_drop = float(dv_drop / derivative.dv[global_peak])
+        slowdown_features.relative_rebound_time = float(rebound_time / search_interval.duration)
+        slowdown_features.dv_min_peak = float(dv_min_peak)
+        slowdown_features.left_peak = int(left_peak)
+        slowdown_features.right_peak = int(right_peak)
+        slowdown_features.valley_i = int(dv_valley_i + left_peak)
+        slowdown_features.rebound_left_i = int(left_level_i + left_peak)
+        slowdown_features.rebound_right_i = int(right_level_i + left_peak)
+        local_features.append(slowdown_features)
 
-    return sorted(features, key=lambda x: x['dv_drop'])[-1]
+    selected_peak_features = sorted(local_features, key=lambda x: x.dv_drop)[-1]
+    return features.with_slowdown_features(selected_peak_features)
+
+
+def smooth_spike(spike: SpikeShape, params: dict) -> SpikeShape:
+    """
+    Smooth the spike shape using a Savitzky-Golay filter.
+    """
+    smoothed_values = savgol_filter(spike.values, **params)
+    return SpikeShape(spike.times, smoothed_values, spike.timestamp, spike.dt)
+
+def calculate_noise_properties(
+    raw: SpikeShape,
+    smoothed: SpikeShape
+) -> NoiseProperties:
+    """
+    Calculate the noise properties of a spike shape.
+    """
+    return NoiseProperties(
+        calculate_signal_power(raw.values),
+        calculate_signal_power(smoothed.values),
+        calculate_signal_power(raw.values - smoothed.values)
+    )
+
+def calculate_signal_power(signal: np.ndarray) -> float:
+    """
+    Calculate the power of a signal.
+    """
+    return float(np.mean(signal ** 2))
+
+def find_search_start(spike: SpikeShape, start_i: int, params: dict) -> int:
+    """
+    Find the start index of the search for the rising phase features.
+    """
+    if params['mode'] == 'amplitude':
+        return find_rise_start_index(
+            spike, start_i, params['param']['threshold']
+        )
+    if params['mode'] == 'time':
+        sample_count = count_proportional_sample_count(
+            spike.peak_i, start_i, params['param']['ratio']
+        )
+        return start_i + sample_count
+    return start_i
+
+def find_search_end(spike: SpikeShape, start_i: int, params: dict) -> int:
+    """
+    Find the end index of the search for the rising phase features.
+    """
+    if params['mode'] == 'dv_max':
+        return np.argmax(np.diff(spike.values)).astype(int)
+    if params['mode'] == 'time':
+        sample_count = count_proportional_sample_count(
+            spike.peak_i, start_i, params['param']['ratio']
+        )
+        return spike.peak_i - sample_count
+    return spike.peak_i
+
+def count_proportional_sample_count(
+    left_i: int,
+    right_i: int,
+    proportion: float
+) -> int:
+    """
+    Returns the number of sample points of the given proportion of the distance
+    between the left and right indices.
+    """
+    return np.round((right_i - left_i) * proportion).astype(int)
 
 def find_rise_start_index(
-    v: np.ndarray,
+    spike: SpikeShape,
     start_i: int,
-    peak_i: int,
     threshold: float
 ) -> int:
     """
@@ -180,6 +419,9 @@ def find_rise_start_index(
     The rising phase is defined as the first point after the start index
     where the signal exceeds a certain proportion of its amplitude.
     """
+    v = spike.values
+    peak_i = spike.peak_i
+
     # align rising phase to the start
     rising_phase = v[start_i:peak_i + 1] - v[start_i]
     threshold_level = threshold * rising_phase[-1]
@@ -187,36 +429,12 @@ def find_rise_start_index(
     # find the first index where the rising phase exceeds the threshold
     return np.where(rising_phase > threshold_level)[0][0] + start_i
 
-def convert_features_to_dataframe(features: list[dict]) -> pd.DataFrame:
+def find_dv_peaks(
+    spike: SpikeShape,
+    search_interval: SignalInterval
+) -> list[int]:
     """
-    Convert the list of features to a pandas DataFrame.
+    Find the peaks of the first derivative of a spike shape within a given search interval.
     """
-
-    rows = []
-    for f in features:
-        rows.append({
-            'timestamp': f['timestamp'],
-            'relative_dv_drop': f['relative_dv_drop'],
-            'relative_rebound_time': f['relative_rebound_time'],
-            'raw_power': f['raw_power'],
-            'smoothed_power': f['smoothed_power'],
-            'noise_power': f['noise_power'],
-            'start_t': f['t'][f['start_i']],
-            'start_v': f['v'][f['start_i']],
-            'peak_t': f['t'][np.argmin(np.abs(f['t']))],
-            'peak_v': f['v'][np.argmin(np.abs(f['t']))],
-            'search_start_t': f['t'][f['search_start_i']],
-            'search_start_v': f['v'][f['search_start_i']],
-            'search_end_t': f['t'][f['search_end_i']],
-            'search_end_v': f['v'][f['search_end_i']],
-            'left_peak_t': f['t'][f['left_peak']] if f['left_peak'] is not None else None,
-            'left_peak_v': f['v'][f['left_peak']] if f['left_peak'] is not None else None,
-            'right_peak_t': f['t'][f['right_peak']] if f['right_peak'] is not None else None,
-            'right_peak_v': f['v'][f['right_peak']] if f['right_peak'] is not None else None,
-            'valley_t': f['t'][f['valley_i']] if f['valley_i'] is not None else None,
-            'valley_v': f['v'][f['valley_i']] if f['valley_i'] is not None else None,
-            'rebound_start_t': f['t'][f['rebound_i'][0]] if f['rebound_i'] else None,
-            'rebound_end_t': f['t'][f['rebound_i'][1]] if f['rebound_i'] else None
-        })
-
-    return pd.DataFrame(rows)
+    peaks, _ = find_peaks(spike.get_derivative().dv, prominence=(None, None))
+    return [peak for peak in peaks if search_interval.is_within(peak)]

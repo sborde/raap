@@ -1,3 +1,0 @@
-- calculate_slowdown_features
-  - ez a régi változata a spike leíró analízisnek
-  - ebből át kell emelni az egyenkénti ábra készítést, amúgy van újabb

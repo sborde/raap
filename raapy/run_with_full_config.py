@@ -7,10 +7,10 @@ This functionality might be converted to multiple Jupyter notebooks.
 from argparse import ArgumentParser
 
 from workflows.common.file_io import load_yaml
-from workflows.spike_description import run_slowdown_analysis
+from workflows.spike_description import run_spike_shape_description
 
 COMMANDS = {
-    'slowdown_analysis': run_slowdown_analysis
+    'slowdown_analysis': run_spike_shape_description
 }
 
 if __name__ == "__main__":

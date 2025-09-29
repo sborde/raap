@@ -1,6 +1,7 @@
 """Utility functions for input/output operations."""
 
 import yaml
+import json
 
 def load_yaml(path: str) -> dict:
     """
@@ -8,6 +9,17 @@ def load_yaml(path: str) -> dict:
     """
     with open(path, 'r', encoding='utf-8') as file:
         return yaml.safe_load(file)
+
+def save_json(path: str, data: dict | list[dict]) -> None:
+    """
+    Save a dictionary as a JSON file at the specified path.
+    
+    Args:
+        path (str): Path to save the JSON file.
+        data (dict): Data to be saved in JSON format.
+    """
+    with open(path, 'w', encoding='utf-8') as file:
+        json.dump(data, file, indent=4, ensure_ascii=False)
 
 def load_textfile(path: str) -> str:
     """

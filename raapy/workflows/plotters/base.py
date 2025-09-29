@@ -8,7 +8,7 @@ import numpy as np
 from matplotlib.figure import Figure
 from pandas import DataFrame
 
-from workflows.common.models.cell import CellWrapper
+from workflows.common.models.cell import CellInfo, CellWrapper
 
 def calculate_sparse_2d_histogram(x, labels, bin_size) -> DataFrame:
     """
@@ -62,27 +62,74 @@ def calculate_sparse_2d_histogram(x, labels, bin_size) -> DataFrame:
     return DataFrame(counts).sort_values(by=['label'], ascending=True)
 
 
-def save_figure(
-    cell_figure: CellWrapper[Figure],
-    suffix: str,
-    config: dict
-) -> str:
-    """
-    Save the figure to the specified output path.
-    Args:
-        cell_figure (CellWrapper[Figure]): The figure to save.
-        output_path (Path): The path where the figure will be saved.
-    """
-    output_path = Path(config['path'])
-    figure_dir = output_path / 'Figures' / cell_figure.group
-    figure_dir.mkdir(parents=True, exist_ok=True)
+class IndividualSpikeFigureSaver:
+    """Helper class to save individual spike feature figures."""
+    def __init__(self, figure_dir: Path, dpi: int = 100):
+        self._figure_dir = figure_dir
+        self._dpi = dpi
+        self._figure_dir.mkdir(parents=True, exist_ok=True)
 
-    fig = cell_figure.data
-    file_name = f'{cell_figure.name}_{suffix}'
-    for format in config['formats']:
-        figure_path = figure_dir / f'{file_name}.{format}'
-        fig.savefig(figure_path, dpi=config['dpi'])
-    plt.close(fig)
-    del fig  # Clean up to avoid memory issues
+    def __call__(self, fig: Figure, name: str):
+        plt.savefig(self._figure_dir / name, dpi=self._dpi)
+        plt.close(fig)
+        del fig
 
-    return str(figure_dir / f'{file_name}.png').replace('\\', '/')
+
+class IndividualSpikeFigureSaverBuilder:
+    """Helper class to build individual figure savers."""
+    def __init__(self, figure_dir: str, dpi: int):
+        self._figure_dir = Path(figure_dir)
+        self._dpi = dpi
+        self._figure_dir.mkdir(parents=True, exist_ok=True)
+
+    def build(self, cell: CellInfo) -> IndividualSpikeFigureSaver:
+        return IndividualSpikeFigureSaver(
+            (self._figure_dir / cell.group / cell.name / 'individual'),
+            self._dpi
+        )
+
+def create_individual_figure_saver(params: dict) -> IndividualSpikeFigureSaverBuilder:
+    """Creates a figure saver for individual spike figures."""
+    return IndividualSpikeFigureSaverBuilder(
+        params['path'],
+        params['dpi']
+    )
+
+class CellwiseFigureSaver:
+    """Helper class to save cell-wise figures."""
+
+    def __init__(
+        self,
+        path: str,
+        suffix: str = '',
+        make_svg: bool = False,
+        dpi: int = 100
+    ):
+        self._figure_dir = Path(path) / 'figures'
+        self._figure_dir.mkdir(parents=True, exist_ok=True)
+        self._suffix = f'_{suffix}' if suffix else ''
+        self._make_svg = make_svg
+        self._dpi = dpi
+
+    def __call__(self, figure: CellWrapper[Figure]):
+        """Saves the given figure to the appropriate directory."""
+        figure_dir = self._figure_dir / figure.group
+        figure_dir.mkdir(parents=True, exist_ok=True)
+
+        fig = figure.data
+        figure_path = figure_dir / f'{figure.name}{self._suffix}'
+
+        fig.savefig(
+            figure_path.with_suffix('.png'),
+            dpi=self._dpi,
+            format='png',
+        )
+        if self._make_svg:
+            fig.savefig(
+                figure_path.with_suffix('.svg'),
+                format='svg',
+            )
+
+        plt.close(fig)
+        del fig
+

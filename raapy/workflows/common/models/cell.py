@@ -51,6 +51,10 @@ class CellWrapper[T]:
         """Get the data of the cell."""
         return self._data
 
+    def with_data[N](self, new_data: N) -> 'CellWrapper[N]':
+        """Create a new CellWrapper with the same info but different data."""
+        return CellWrapper(self._cell_info, new_data)
+
 
 class CellPath:
     """

@@ -4,6 +4,9 @@ and group's associated metadata.
 """
 
 
+from typing import Optional
+
+
 class GroupInfo:
     """
     A class that holds information about a group of cells.
@@ -20,9 +23,10 @@ class GroupInfo:
 
 class GroupWrapper[T]:
     """A wrapper class for a group of cells' data and its information."""
-    def __init__(self, group_info: GroupInfo, members: list[T]):
+    def __init__(self, group_info: GroupInfo, members: list[T], n_all: int):
         self._group_info = group_info
         self._members = members
+        self._n_all = n_all
 
     @property
     def info(self) -> GroupInfo:
@@ -33,6 +37,11 @@ class GroupWrapper[T]:
     def name(self) -> str:
         """Get the name of the group."""
         return self._group_info.name
+
+    @property
+    def n_all(self) -> int:
+        """Get the total number of the pool where this group comes from."""
+        return self._n_all
 
     @property
     def members(self) -> list[T]:

@@ -12,21 +12,23 @@ Versions:
    - 2025. 07. 29. - way of starting the analysis changed
 """
 
-from pathlib import Path
+import abc
 
-import pandas as pd
-import numpy as np
-
-from pandas import DataFrame
-from matplotlib.figure import Figure
 from tqdm import tqdm
 
-from workflows.plotters.base import save_figure
-from workflows.plotters.spike_shapes import plot_grouped_spikes
-from workflows.processors.spike_transformers import create_transformer
-from workflows.common.data_io import (
+from workflows.plotters.spike_shapes import CategorizedSpikeShapePlotter
+from services.data_managers.output import (
+    create_exporter
+)
+from services.data_managers.input import (
     list_input_files,
     make_grouped_path
+)
+
+from workflows.plotters.base import (
+    IndividualSpikeFigureSaverBuilder,
+    CellwiseFigureSaver,
+    create_individual_figure_saver
 )
 from workflows.common.models.cell import (
     CellInfo,
@@ -34,335 +36,193 @@ from workflows.common.models.cell import (
 )
 from workflows.common.models.spike import (
     SpikeShapes,
-    SpikeShape,
     load_spike_shapes
 )
-from workflows.common.models.group import (
-    GroupInfo,
-    GroupWrapper
-)
-from workflows.plotters.spike_types import make_spike_type_piechart
-from workflows.plotters.spike_properties import make_scatter_histogram, make_slowdown_debug_images, make_valley_time_deviation_histogram, make_residual_histogram
-from workflows.common.report_generation import create_report_generator
-from workflows.calculators.slowdown_descriptors import FEATURE_PROPERTIES as FEATURES, calculate_rising_features, convert_features_to_dataframe
 
-def run_slowdown_analysis(config: dict) -> None:
+from workflows.plotters.spike_properties import (
+    ResidualHistogramPlotter,
+    ScatterHistogramPlotter,
+    SpikePropertyPlotter,
+    ValleyTimeDeviationHistogramPlotter,
+    make_slowdown_debug_images
+)
+from workflows.plotters.spike_types import SpikeTypePiechartPlotter
+
+from workflows.calculators.slowdown_descriptors import DescribedSpikeShape
+from services.spike_description import (
+    SpikeShapeCategorizer,
+    SpikeShapeDescriptor,
+    select_detected_spikes
+)
+
+def run_spike_shape_description(config: dict) -> None:
     """
-    Runs the full slowdown analysis on the dataset 
+    Runs the full spike shape description analysis on the dataset 
     based on the provided configuration.
     
     Args:
         config (dict): Configuration dictionary for the analysis.
     """
 
-    report_generator = create_report_generator(config)
+    workflow = SpikeShapeDescriptionFullWorkflow(config)
 
     cells = list_input_files(config)
-    results = []
-    for i, cell in enumerate(cells):
-        print(f"Processing file {i+1}/{len(cells)}: {cell.name}")
-        raw_path = make_grouped_path(cell, config['data']['raw_data'])
-        spike_shapes = load_spikes(cell, raw_path, config['params']['extractor'])
-        spike_features = describe_spikes(spike_shapes, config['params']['descriptor'])
-        spike_features = categorize_spikes(spike_features, config['params']['classification'])
-        results.append(plot_spike_properties(spike_features, config))
-        report_generator(results)
-
-def load_spikes(cell: CellInfo, path: Path, params: dict) -> CellWrapper:
-    """Load spikes from the given cell path using the specified extractor.
-    Args:
-        cell_path (CellWrapper[Path]): The path to the cell data.
-        config (dict): Configuration dictionary containing extractor settings.
-    Returns:
-        CellWrapper[SpikeShapes]: A wrapper containing the loaded spike shapes.
-    """
-    spikes = load_spike_shapes(path, params)
-    return CellWrapper(cell, spikes)
-
-def describe_spikes(
-    spikes: CellWrapper[SpikeShapes],
-    config: dict
-) -> CellWrapper[pd.DataFrame]:
-    """
-    Describe the spikes using the given descriptor configuration.
-    """
-    features = [
-        calculate_rising_features(spike, config)
-        for spike in tqdm(spikes.data, desc=f'Describe spikes')
+    [
+        workflow.run(cell) for cell in
+        tqdm(cells, total=len(cells), desc="Describe spikes")
     ]
-    features = [f for f in features if f is not None]
 
-    if len(features) < len(spikes.data):
-        n_errors = len(spikes.data) - len(features)
-        print(f"[INFO]: {n_errors} spike's start couldn't be detected.")
 
-    output_path = Path(config['output_dir'])
-    if config['single_spike_images']['do']:
-        debug_dir = output_path / 'Figures' / 'Individual'
-        if spikes.group is not None:
-            debug_dir = debug_dir / spikes.group
-        debug_dir = debug_dir / spikes.name
-        debug_dir.mkdir(parents=True, exist_ok=True)
-        plot_features = features
-        if config['single_spike_images']['skip_zero']:
-            plot_features = [
-                f for f in features 
-                if (
-                    f['relative_dv_drop'] > 0 or
-                    f['relative_rebound_time'] > 0
-                )
-            ]
-        make_slowdown_debug_images(
-            plot_features,
-            debug_dir,
-            output_dpi=config['single_spike_images']['dpi']
-        )
-        print('Individual images created.')
-
-    feature_frame = convert_features_to_dataframe(features)
-
-    return CellWrapper[pd.DataFrame](spikes.info, feature_frame)
-
-def categorize_spikes(
-    cell_features: CellWrapper[DataFrame],
-    config: dict
-) -> CellWrapper[DataFrame]:
-    """ Categorize spikes based on the provided configuration.
-    Args:
-        cell_features (CellWrapper[DataFrame]): The features of the cell spikes.
-        config (dict): Configuration dictionary containing categorization settings.
-    Returns:
-        CellWrapper[DataFrame]: A DataFrame of spike features with category labels
+class SpikeShapeDescriptorWorkflow:
     """
-    features = cell_features.data.copy()
-    groups = config['groups']
-    features['spike_type'] = groups[0]['name']  # Default category
-    for group in groups[1:]:
-        bottom_left = group['bottom-left']
-        flags = []
-        for i, feature in enumerate(FEATURES):
-            flags.append(bottom_left[i] < features[feature['name']])
-        flag = np.logical_and.reduce(flags)
-        features.loc[flag, 'spike_type'] = group['name']
-    features['spike_type'] = features['spike_type'].fillna('other')
-    return CellWrapper[pd.DataFrame](cell_features.info, features)
+    A class to describe spike shapes using wavelet transforms and other features.
+    """
 
-def plot_spike_properties(
-    properties: CellWrapper[DataFrame],
-    config: dict
-) -> dict:
-    """Describe spikes for a cell spread across multiple files."""
-
-    cell_results = {
-        'name': properties.name,
-        'type': properties.group,
-        'images': []
-    }
-
-    # Save features
-    output_path = (
-        Path(config['output']['path']) /
-        'Preprocessed' /
-        properties.group
-    )
-    output_path.mkdir(parents=True, exist_ok=True)
-    properties.data.to_csv(output_path / f'{properties.name}.csv', index=False)
-
-    # Do plots
-    suffixes = config['output']['suffixes']
-    cell_type_color = config['plot']['palette'][properties.group]
-
-    if config['plot']['selector']['residual_histogram']:
-        # Create histogram of noise powers
-        cell_figure = make_residual_histogram(
-            properties,
-            config['plot']['residual_histogram']
+    def __init__(self, config: dict):
+        self._config = config
+        self._descriptor = SpikeShapeDescriptor(config['params']['descriptor'])
+        self._exporter = create_exporter(config['data']['features'])
+        self._figure_saver_builder = IndividualSpikeFigureSaverBuilder(
+            config['data']['figures']['path'],
+            config['plot']['global']['dpi']
         )
-        figure_path = save_figure(cell_figure, suffixes['residual_histogram'], config['output'])
-        cell_results['images'].append({
-            'path': figure_path,
-            'type': 'residual_histogram'
-        })
+        self._save_individual = config['params']['descriptor']['single_spike_images']['do']
 
-    if config['plot']['selector']['scatter']:
-        # Create scatter histogram
-        cell_figure = make_scatter_histogram(
-            properties,
-            FEATURES,
-            config['plot'],
-            tuple(config['analysis']['classification']['groups'][-1]['bottom-left']))
-        figure_path = save_figure(cell_figure, suffixes['scatter'], config['output'])
-        cell_results['images'].append({
-            'path': figure_path,
-            'type': 'scatter'
-        })
+    def run(self, cell: CellInfo) -> CellWrapper[list[DescribedSpikeShape]]:
+        """ Runs the full spike shape description analysis on a single cell."""
+        cell_spikes = self._load(cell)
+        cell_spikes = self._describe(cell_spikes)
+        self._exporter.export(cell_spikes)
+        self._plot_single_spike_features(cell_spikes)
+        return cell_spikes
 
-    if config['plot']['selector']['category_piechart']:
-        # Create pie chart of spike types
-        piechart_config = config['plot']['category_piechart']
-        piechart_config['edge_color'] = {
-            'AIS-AP': cell_type_color,
-            'RA-AP': cell_type_color,
-            'UNKNOWN': '#d0d0d0'
-        }
-        piechart_config['fill_color'] = {
-            'AIS-AP': cell_type_color,
-            'RA-AP': '#ffffff',
-            'UNKNOWN': '#d0d0d0'
-        } 
-        piechart_config['hatch'] = {
-            'AIS-AP': None,
-            'RA-AP': '//',
-            'UNKNOWN': None
-        }
-        cell_figure = make_spike_type_piechart(properties, piechart_config)
-        figure_path = save_figure(cell_figure, suffixes['category_piechart'], config['output'])
-        cell_results['images'].append({
-            'path': figure_path,
-            'type': 'category_piechart'
-        })
+    def _load(self, cell: CellInfo) -> CellWrapper[SpikeShapes]:
+        """ Loads the spikes for the given cell using the provided configuration."""
+        path = make_grouped_path(cell, self._config['data']['raw_data'])
+        spikes = load_spike_shapes(path, self._config['params']['extractor'])
+        return CellWrapper(cell, spikes)
 
-    if config['plot']['selector']['category_averages']:
-        # Plot grouped spikes
-        average_plot_config = config['plot']['category_averages']
-        average_plot_config['average']['color'] = cell_type_color
-        average_plot_config['group_order'] = [
-            g['name'] for g in config['analysis']['classification']['groups']
+    def _describe(self, cell: CellWrapper[SpikeShapes]) -> CellWrapper[list[DescribedSpikeShape]]:
+        """ Loads the spikes for the given cell using the provided configuration."""
+        spike_features = self._descriptor(cell.data)
+        return CellWrapper(cell.info, spike_features)
+
+    def _plot_single_spike_features(self, cell: CellWrapper[list[DescribedSpikeShape]]):
+        """Plots the features for a single spike."""
+        if self._save_individual:
+            figure_saver = self._figure_saver_builder.build(cell.info)
+            plot_features = (
+                select_detected_spikes(cell.data)
+                if self._config['params']['descriptor']['single_spike_images']['show'] == 'detected'
+                else cell.data
+            )
+            make_slowdown_debug_images(plot_features, figure_saver)
+
+
+class SpikeShapeCategorizerWorkflow:
+    """
+    A class to categorize spike shapes using their features.
+    """
+
+    def __init__(self, config: dict):
+        self._categorizer = SpikeShapeCategorizer(config['params']['categorization'])
+
+    def run(
+        self,
+        cell_features: CellWrapper[list[DescribedSpikeShape]]
+    ) -> CellWrapper[list[DescribedSpikeShape]]:
+        """ Runs the full spike shape description analysis on a single cell."""
+        categorized_features = self._categorizer(cell_features.data)
+        return CellWrapper(cell_features.info, categorized_features)
+
+
+class SpikeShapeFeaturePlotterWorkflow:
+    """
+    A class to plot spike shape features using wavelet transforms and other features.
+    """
+
+    def __init__(self, config: dict):
+        self._config = config
+        self._plotters = [
+            decorate_plotter_with_saver(
+                create_spike_property_plotter(plot_type, config['plot']),
+                config['data']['figures']['path'],
+                config['plot'][plot_type].get('suffix', ''),
+                config['plot']['global']
+            )
+            for plot_type, selector_flag in config['params']['plot']['selector'].items()
+            if selector_flag
         ]
 
-        average_plot_config['transformer'] = create_transformer(
-            average_plot_config['mode'],
-            config['analysis']['descriptor']
-        )
+    def run(self, cell: CellWrapper[list[DescribedSpikeShape]]) -> CellWrapper[list[DescribedSpikeShape]]:
+        """ Runs the full spike shape description analysis on a single cell."""
+        for plotter in self._plotters:
+            plotter(cell)
+        return cell
 
-        cell_figure = create_grouped_average_plot(
-            cell_spikes,
-            properties.data,
-            average_plot_config
-        )
-        figure_path = save_figure(cell_figure, suffixes['category_averages'], config['output'])
-        cell_results['images'].append({
-            'path': figure_path,
-            'type': 'category_averages'
-        })
 
-    if config['plot']['selector']['valley_time_deviation']:
-        # Create histogram of valley times
-        cell_figure = make_valley_time_deviation_histogram(
-            properties,
-            config['plot']['valley_time_deviation']
-        )
-        figure_path = save_figure(cell_figure, suffixes['valley_time_deviation'], config['output'])
-        cell_results['images'].append({
-            'path': figure_path,
-            'type': 'valley_time_deviation'
-        })
-
-    return cell_results
-
-def create_grouped_average_plot(
-    spike_shapes: CellWrapper[SpikeShapes],
-    grouping_vector: pd.DataFrame,
-    plot_config: dict
-) -> CellWrapper[Figure]:
+class SpikeShapeDescriptionFullWorkflow:
     """
-    Create a grouped average plot of the spike shapes.
+    A protocol that defines the interface for a full spike shape description workflow.
     """
-    groups = [
-        form_group(spike_shapes, grouping_vector, group_name)
-        for group_name in plot_config['group_order']
-    ]
-    fig = plot_grouped_spikes(groups, plot_config)
-    return CellWrapper[Figure](spike_shapes.info, fig)
+    def __init__(self, config: dict):
+        self._descriptor = SpikeShapeDescriptorWorkflow(config)
+        self._categorizer = SpikeShapeCategorizerWorkflow(config)
+        self._plotter = SpikeShapeFeaturePlotterWorkflow(config)
 
-def form_group(
-    spike_shapes: CellWrapper[SpikeShapes],
-    assignments: pd.DataFrame,
-    name: str
-) -> GroupWrapper[SpikeShape]:
+    @abc.abstractmethod
+    def run(self, cell: CellInfo) -> CellWrapper[list[DescribedSpikeShape]]:
+        """ Runs the full spike shape description analysis on a single cell."""
+        spike_features = self._descriptor.run(cell)
+        spike_features = self._categorizer.run(spike_features)
+        return self._plotter.run(spike_features)
+
+
+class SavedSpikePropertyPlotter(SpikePropertyPlotter):
     """
-    Form a group of spike shapes based on the grouping vector.
+    A class that plots the spike shape properties specified by the
+    plotter object and saves the resulting figure.
     """
-    timestamps = spike_shapes.data.timestamps
-    member_timestamps = assignments.loc[
-        assignments['spike_type'] == name, 'timestamp'
-    ]
-    members = []
-    for ts in member_timestamps:
-        actual_index = np.argmin(np.abs(timestamps - ts)).astype(int)
-        members.append(spike_shapes.data[actual_index])
-    return GroupWrapper[SpikeShape](GroupInfo(name), members)
+    def __init__(self, plotter: SpikePropertyPlotter, saver: CellwiseFigureSaver):
+        self._plotter = plotter
+        self._save_figure = saver
+    
+    def __call__(self, properties: CellWrapper[list[DescribedSpikeShape]]):
+        """Describe spikes for a cell spread across multiple files."""
+        cell_figure = self._plotter(properties)
+        self._save_figure(cell_figure)
+
+def decorate_plotter_with_saver(
+    plotter: SpikePropertyPlotter,
+    path: str,
+    suffix: str,
+    params: dict
+) -> SavedSpikePropertyPlotter:
+    """A helper function to decorate a spike property plotter with a figure saver."""
+    figure_saver = CellwiseFigureSaver(
+        path,
+        suffix=suffix,
+        make_svg=params.get('make_svg', False),
+        dpi=params.get('dpi', 100)
+    )
+    return SavedSpikePropertyPlotter(plotter, figure_saver)
+
+def create_spike_property_plotter(
+    plot_type: str,
+    params: dict
+) -> SpikePropertyPlotter:
+    """A factory function that creates a spike property plotter."""
+    if plot_type == 'residual_histogram':
+        return ResidualHistogramPlotter(params[plot_type] | {'palette': params['palette']})
+    if plot_type == 'scatter':
+        return ScatterHistogramPlotter(params[plot_type] | {'palette': params['palette']})
+    if plot_type == 'valley_time_deviation':
+        return ValleyTimeDeviationHistogramPlotter(params[plot_type] | {'palette': params['palette']})
+    if plot_type == 'category_piechart':
+        return SpikeTypePiechartPlotter(params[plot_type] | {'palette': params['palette']})
+    if plot_type == 'category_averages':
+        return CategorizedSpikeShapePlotter(params[plot_type] | {'palette': params['palette']})
+    raise ValueError(f'Unknown spike property plotter type: {plot_type}')
 
 
-# def describe_spikes_per_cell(cell_data: tuple[str, list[PathEntry]], config: dict) -> None:
-#     """Describe spikes for a cell spread across multiple files."""
 
-#     cell_name = cell_data[0]
-#     entries = cell_data[1]
-#     output_path = Path(config['output_dir'])
-
-#     all_features = []
-#     for entry in entries:
-#         print(f'Processing {entry.path.stem}...')
-#         features = describe_spikes(entry, config)
-#         features['cell_name'] = cell_name
-
-#         features['spike_type'] = entry.spike_type
-#         all_features.append(features)
-
-#     all_features_df = pd.concat(all_features, ignore_index=True)
-
-#     if entries[0].subdir is not None:
-#         all_features_df['cell_type'] = entries[0].subdir
-
-#     all_features_df.to_csv(
-#         output_path / 'Preprocessed' / f'{cell_name}_features.csv',
-#         index=False
-#     )
-
-#     binned_features = calculate_sparse_2d_histogram(
-#         all_features_df[['relative_dv_drop', 'relative_rebound_time']].values,
-#         all_features_df['spike_type'].values,
-#         bin_size=0.005
-#     )
-
-#     palette = config['palette']
-#     if config['coloring'] == 'cell_type':
-#         if entries[0].subdir is None:
-#             palette = None
-#         binned_features['label'] = entries[0].subdir
-
-#     fig, ax = plt.subplots(figsize=(10, 10))
-#     sns.scatterplot(
-#         data=binned_features,
-#         x='x1',
-#         y='x2',
-#         size='ratio',
-#         hue='label',
-#         sizes=(10, 1000),
-#         palette=palette,
-#         ax=ax
-#     )
-#     ax.set_xlabel('Relative dV Drop')
-#     ax.set_ylabel('Relative Rebound Time')
-
-#     handles, labels = ax.get_legend_handles_labels()
-#     components_to_keep = [
-#         (handle, label) for handle, label
-#         in zip(handles, labels)
-#         if label in ['RAAP', 'AISAP']
-#     ]
-#     style_handles = [h for h, _ in components_to_keep]
-#     style_labels = [l for _, l in components_to_keep]
-#     ax.legend(
-#         style_handles,
-#         style_labels,
-#         title='Spike Type',
-#         loc='lower right'
-#     )
-#     ax.set_title(f'{cell_name} spike features')
-
-#     fig.savefig(
-#         output_path / 'Figures' / f'{cell_name}_features.png', dpi=300
-#     )
-#     plt.close(fig)
