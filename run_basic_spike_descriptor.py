@@ -13,7 +13,7 @@ if __name__ == "__main__":
     run_config = load_customized_config(CONFIG_NAME)
     analysis = BasicSpikeFeatureDescription(run_config)
 
-    input_files = list_input_files(run_config['data'], run_config['input'])
+    input_files = list_input_files(run_config['data'], run_config['input'], False)
     for input_file in input_files:
         try:
             print(f"Processing {input_file.name}...", end=" ")

@@ -25,19 +25,31 @@ class BasicSpikeFeatureDescription:
         self._config = config
         self._suffix = config.get('suffix', 'basic_features')
         self._params = config['params']
-        self._result_dir = Path(config['output']['path'])
+        self._result_dir = Path(config['output']['path']) / 'Preprocessed'
+        self._figure_dir = Path(config['output']['path']) / 'Figures'
 
     def __call__(self, input_file: CellWrapper[dict[str, Path]]):
         # input_data = load_input_data(input_file)
         spikes = self._extract_spikes(input_file)
-        features = pd.DataFrame(self._describe_spikes(spikes))
+        spike_feature_pairs = self._describe_spikes(spikes)
+        feature_table = pd.DataFrame([
+            spike_feature_pair[1] for spike_feature_pair in spike_feature_pairs
+        ])
         output_path = (
             self._result_dir /
             input_file.info.cell_type /
             f"{input_file.info.name}_{self._suffix}.xlsx"
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        features.to_excel(output_path, index=False)
+        feature_table.to_excel(output_path, index=False)
+        if self._params['plot_individual']:
+            figure_output_dir = (
+                self._figure_dir /
+                input_file.info.cell_type /
+                input_file.info.name
+            )
+            figure_output_dir.mkdir(parents=True, exist_ok=True)
+            self._plot_spike_features(spike_feature_pairs, figure_output_dir)
 
     @property
     def suffix(self) -> str:
@@ -48,7 +60,7 @@ class BasicSpikeFeatureDescription:
         # Load spikes from the input file
         return load_spike_shapes(input_file.data['raw'], self._params['extractor'])
 
-    def _describe_spikes(self, spikes: SpikeShapes):
+    def _describe_spikes(self, spikes: SpikeShapes) -> list[tuple[PreparedSpikeShape, dict]]:
         # Describe the spikes and extract features
         features = list(filter(
             lambda x: x is not None,
@@ -57,9 +69,12 @@ class BasicSpikeFeatureDescription:
         if len(features) < len(spikes):
             n_errors = len(spikes) - len(features)
             print(f"[INFO]: {n_errors} spike's start couldn't be detected.")
-        return features
+        return features # type: ignore
 
-    def _describe_spike(self, spike: SpikeShape) -> Optional[dict]:
+    def _describe_spike(
+        self,
+        spike: SpikeShape
+    ) -> Optional[tuple[PreparedSpikeShape, dict]]:
         # Describe a single spike and extract features
         prepared_spike = self._prepare_spike(spike)
         if prepared_spike is None:
@@ -71,53 +86,12 @@ class BasicSpikeFeatureDescription:
         base_v = self._calculate_base_v(prepared_spike)
         prespike_slope, prespike_intercept = self._calculate_prespike_slope(prepared_spike)
 
-        # plt.figure()
-        # plt.plot(prepared_spike.spike.times, prepared_spike.spike.values, '-')
-        # plt.plot(
-        #     prepared_spike.spike.times[prepared_spike.start],
-        #     prepared_spike.spike.values[prepared_spike.start],
-        #     'ro'
-        # )
-        # plt.plot(
-        #     prepared_spike.spike.times[prepared_spike.peak],
-        #     prepared_spike.spike.values[prepared_spike.peak],
-        #     'go'
-        # )
-        # plt.plot(
-        #     [half_left[0], half_right[0]],
-        #     [half_left[1], half_right[1]],
-        #     'k--',
-        #     label='Halfwidth'
-        # )
-        # plt.plot(
-        #     [prepared_spike.spike.times[prepared_spike.start], prepared_spike.spike.times[prepared_spike.peak]],
-        #     [prepared_spike.spike.values[prepared_spike.start], prepared_spike.spike.values[prepared_spike.start]],
-        #     'm--',
-        #     label='Rise time'
-        # )
-        # plt.plot(
-        #     [prepared_spike.spike.times[prepared_spike.peak], prepared_spike.spike.times[prepared_spike.peak]],
-        #     [prepared_spike.spike.values[prepared_spike.start], prepared_spike.spike.values[prepared_spike.peak]],
-        #     'g--',
-        #     label='Amplitude'
-        # )
-        # plt.plot(
-        #     [prepared_spike.spike.times[prepared_spike.start], prepared_spike.spike.times[prepared_spike.peak]],
-        #     [prepared_spike.spike.values[prepared_spike.start], prepared_spike.spike.values[prepared_spike.peak]],
-        #     'b--',
-        #     label='Rising slope'
-        # )
-        # plt.plot(
-        #     prepared_spike.spike.times[:prepared_spike.start+1],
-        #     prespike_slope * prepared_spike.spike.times[:prepared_spike.start+1] + prespike_intercept,
-        #     'y--',
-        #     label='Prespike slope'
-        # )
-        # plt.axhline(base_v, color='c', linestyle='--', label='Base V')
-        # plt.legend(loc='upper right')
-        # plt.show()
+        prepared_spike.halfwidth_left = half_left
+        prepared_spike.halfwidth_right = half_right
 
-        return {
+        return (
+            prepared_spike,
+            {
             'timestamp': spike.timestamp,
             'rmsd': prepared_spike.noise_properties['rmsd'],
             'amplitude': amplitude,
@@ -127,7 +101,86 @@ class BasicSpikeFeatureDescription:
             'start_v': prepared_spike.spike.values[prepared_spike.start],
             'base_v': base_v,
             'prespike_slope': prespike_slope,
-        }
+            }
+        )
+
+    def _plot_spike_features(
+        self,
+        spike_feature_pairs: list[tuple[PreparedSpikeShape, dict]],
+        output_dir: Path
+    ):
+        """
+        Plots each individual spike with the calculated features and some
+        auxiliary information about the description process.
+        """
+        fig_size = (15, 15)
+        n_spike_on_figure = 25
+        n_rows, n_cols = 5, 5
+
+        def create_fig():
+            """Create a new figure with the specified size."""
+            return plt.subplots(n_rows, n_cols, figsize=fig_size)
+        n_spikes = len(spike_feature_pairs)
+        fig, axes = create_fig()
+        for i, (spike, features) in enumerate(spike_feature_pairs):
+            ax = axes[(i % n_spike_on_figure) // n_cols, (i % n_spike_on_figure) % n_cols]
+            ax.plot(spike.spike.times, spike.spike.values, '-')
+            ax.plot(
+                spike.spike.times[spike.start],
+                spike.spike.values[spike.start],
+                'ro'
+            )
+            ax.plot(
+                spike.spike.times[spike.peak],
+                spike.spike.values[spike.peak],
+                'go'
+            )
+            if spike.halfwidth_left is not None and spike.halfwidth_right is not None:
+                ax.plot(
+                    [spike.halfwidth_left[0], spike.halfwidth_right[0]],
+                    [spike.halfwidth_left[1], spike.halfwidth_right[1]],
+                    'k--',
+                    label='Halfwidth'
+                )
+            ax.plot(
+                [spike.spike.times[spike.start], spike.spike.times[spike.peak]],
+                [spike.spike.values[spike.start], spike.spike.values[spike.start]],
+                'm--',
+                label='Rise time'
+            )
+            ax.plot(
+                [spike.spike.times[spike.peak], spike.spike.times[spike.peak]],
+                [spike.spike.values[spike.start], spike.spike.values[spike.peak]],
+                'g--',
+                label='Amplitude'
+            )
+            ax.plot(
+                [spike.spike.times[spike.start], spike.spike.times[spike.peak]],
+                [spike.spike.values[spike.start], spike.spike.values[spike.peak]],
+                'b--',
+                label='Rising slope'
+            )
+            ax.plot(
+                spike.spike.times[:spike.start+1],
+                features['prespike_slope'] * spike.spike.times[:spike.start+1] + spike.spike.values[spike.start],
+                'y--',
+                label='Prespike slope'
+            )
+            ax.axhline(features['base_v'], color='c', linestyle='--', label='Base V')
+            # ax.legend(loc='upper right')
+            ax.set_title(f"Spike at {features['timestamp']:.3f}s")
+            if (i + 1) % n_spike_on_figure == 0 or (i + 1) == n_spikes:
+                # Save the current figure and create a new one
+                fig.tight_layout()
+                output_path = (
+                    output_dir /
+                    f"spike_features_{i // n_spike_on_figure}.png"
+                )
+                fig.savefig(output_path)
+                plt.close(fig)
+                if (i + 1) != n_spikes:
+                    fig, axes = create_fig()
+
 
     def _prepare_spike(self, spike: SpikeShape) -> Optional[PreparedSpikeShape]:
         # Prepare spike for feature extraction

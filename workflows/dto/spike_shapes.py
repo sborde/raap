@@ -17,6 +17,8 @@ class PreparedSpikeShape:
         self._spike = spike
         self._start = start
         self._peak = peak
+        self.halfwidth_left: Optional[tuple[float, float]] = None
+        self.halfwidth_right: Optional[tuple[float, float]] = None
         self._noise_properties = noise_properties or {}
 
     @property

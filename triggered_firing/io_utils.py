@@ -97,7 +97,7 @@ def list_files_recursively(path: str, extension: str) -> list[Path]:
     return list(Path(path).glob(f'**/*.{extension}'))
 
 def list_input_files(
-    data_config: dict, input_config: dict
+    data_config: dict, input_config: dict, processed: bool = True
 ) -> list[CellWrapper[dict[str, Path]]]:
     """
     List input files based on the data and input configuration.
@@ -110,6 +110,9 @@ def list_input_files(
         ) for file_path in all_files
         if not need_to_skip(file_path, input_config)
     ]
+
+    if not processed:
+        return selected
 
     for entry in selected:
         processed_path = make_processed_path(entry.info, data_config['processed_data'])

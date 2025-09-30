@@ -6,7 +6,7 @@ data:
     extension: mat
   # Path to the processed_data directory with the same structure as raw_data.
   processed_data:
-    path: C:\tmp\Bozso2025\PutRAAP\Results\IndividualSlowdownAnalysis\Preprocessed
+    path: C:\tmp\Bozso2025\PutRAAP\Results\IndividualSlowdownAnalysis
     extension: csv
     suffix:
 # Input selection: what to process from the data folders?
@@ -66,6 +66,7 @@ params:
       polyorder: 3
     # dV threshold to detect spike start as a proportion of the max dV
     start_threshold: 0.1
+  plot_individual: 1
 # Plot parameters
 plot:
   # Thickness of the line representing the histogram
