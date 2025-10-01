@@ -1,29 +1,62 @@
+# Paths for the data files
+data:
+  invivo:
+    # Path to the raw data where files are grouped into subdirectories.
+    raw_data:
+      path: C:\Datasets\raap\InVivoJuxta\
+      extension: mat
+    # Path to the processed_data directory with the same structure as raw_data.
+    results:
+      path: C:\tmp\Bozso2025\PutRAAP\Results\NewSpikeDescriptor\InVivo
+      extension: csv
+      suffix:
+  invitro:
+    # Path to the raw data where files are grouped into subdirectories.
+    raw_data:
+      path: C:\Datasets\raap\InVitroJuxtaSorted\Data\mat
+      extension: mat
+    # Path to the processed_data directory with the same structure as raw_data.
+    results:
+      path: C:\tmp\Bozso2025\PutRAAP\Results\NewSpikeDescriptor\InVitro
+      extension: csv
+      suffix:
+# Input selection: what to process from the data folders?
+#  all: files in all directories with the given extension, skips the files 
+#    in the skip_files list and dirs in the skip_dirs list
+# mode: all
+# skip_files:
+#   - file1.mat
+#   - file2.mat
+# skip_dirs:
+#   - dir1
+#   - dir2
+#  - all files in the directories specified in select_dirs list, without the
+#    files in the skip_files list. In this case, skip_dirs ignored.
+# mode: directory
+# select_dirs:
+#   - RSI_L2-3
+#   # - dir1
+#   # - dir2
+# skip_files:
+#   - file1.mat
+#   - file2.mat
+# mode: file
+#  - files in any of the subdirectories from the select_files
+# select_files:
+#   - file1.mat
+#   - file2.mat
 input:
-  # Type of the input
-  #  - recursive: recursively processes all files in each subdirectory
-  #  - directory: processes all files found in the given directory
-  #  - file: processes a single file of the given path
-  mode: recursive
-  # Path of the input dir or the file (in case of type=file)
-  path: C:\Datasets\raap\InVivoJuxta\
-  # List of files to skip, leave empty if you want all files
-  skip_files:
-    # - file1.mat
-    # - file2.mat
-  # List of directories to skip, leave empty if you want all directories
-  skip_dirs:
-    # - dir1
-    # - dir2
-# Ouptput parameters
+  dataset: invitro
+  mode: directory
+  select_dirs:
+    - juxta
+    # - RSI_L2-3
+    # - FSI_L2-3
+# Output parameters
 output:
-  # Path to the output directory
-  path: C:\tmp\Bozso2025\PutRAAP\Results\TriggeredFiringComparison\01_processed_data
-  # List of output formats
-  # - png: save figures as PNG files
-  # - svg: save figures as SVG files
-  formats:
-    - png
-  # dpi of the output png (if png is set)
+  # Set True if you want to save as SVG (PNG is always saved)
+  make_svg: True
+  # dpi of the output png
   dpi: 100
   suffixes:
     # Suffixes of the output files' name
@@ -35,7 +68,7 @@ output:
     category_piechart: piechart
     # - residual_histogram: suffix for the residual histogram
     residual_histogram: residuals
-    valley_time_deviation:  valleys
+    valley_time_deviation: valleys
 # Analysis parameters
 analysis:
   # Spike shape extractor parameters
@@ -72,6 +105,7 @@ analysis:
       mode: 'time'
       param:
         threshold: 0.15
+    plot_individual: 1
   # 2D-threshold based classification group parameters. The groups must be 
   # enumerated in a list. Each group is defined by the bottom-left corner of 
   # its area. The groups must be enumerated in an increasing order, starting 

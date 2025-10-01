@@ -17,7 +17,8 @@ from typing import Callable
 from pathlib import Path
 
 from analyses.slowdown_analysis import analyze_cell
-from utils.file_utils import enumerate_input_files
+from common.data_utils import CellWrapper
+from utils.file_utils import enumerate_input_files, list_input_files
 from utils.report_generators import compose_textfile
 
 def generate_report(
@@ -45,6 +46,9 @@ def run_slowdown_analysis(config: dict) -> None:
         config (dict): Configuration dictionary for the analysis.
     """
 
+    dataset_name = config['input']['dataset']
+    config['output']['path'] = config['data'][dataset_name]['results']['path']
+
     template_path = Path('html_templates') / 'index.html'
     report_path = Path(config['output']['path']) / 'index_pooled.html'
 
@@ -61,9 +65,18 @@ def run_slowdown_analysis(config: dict) -> None:
         """
         generate_report(figure_dicts, report_composer)
 
-    cells = enumerate_input_files(config)
+    # cells = enumerate_input_files(config)
+    cells = list_input_files(
+        config['data'],
+        config['input'],
+        processed=False
+    )
+    cells = list(map(
+        lambda cell: CellWrapper(cell.info, cell.data['raw']),
+        cells
+    ))
     results = []
     for i, cell in enumerate(cells):
         print(f"Processing file {i+1}/{len(cells)}: {cell.name}")
         results.append(analyze_cell(cell, config))
-        report_generator(results)
+        # report_generator(results)

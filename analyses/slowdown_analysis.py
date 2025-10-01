@@ -13,7 +13,7 @@ import seaborn as sns
 
 from scipy.signal import savgol_filter
 
-from common.data_utils import CellWrapper, GroupInfo, GroupWrapper
+from common.data_utils import CellInfo, CellWrapper, GroupInfo, GroupWrapper
 from analyses.slowdown_descriptors import (
     calculate_rising_features,
     calculate_sparse_2d_histogram,
@@ -77,25 +77,54 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
         'images': []
     }
 
+    analysis_type =  config['input']['dataset']
     # Load spike shapes
-    cell_spikes = load_spikes(cell_path, config['analysis']['extractor'])
-    # Calculate features
-    cell_features = describe_spikes(cell_spikes, config['analysis']['descriptor'])
-    # Categorize spikes
-    cell_features = categorize_spikes(cell_features, config['analysis']['classification'])
+    if analysis_type == 'invivo':
+        cell_spikes = load_spikes(cell_path, config['analysis']['extractor'])
+        cell_features = describe_spikes(cell_spikes, config['analysis']['descriptor'])
+        cell_features = categorize_spikes(cell_features, config['analysis']['classification'])
+        cell_type_color = config['plot']['palette'][cell_features.cell_type]
+    elif analysis_type == 'invitro':
+        file_name = cell_path.data.stem
+        if file_name.endswith('AISAP'):
+            return {}
+        cell_info = cell_path.info
+        cell_name = '_'.join(file_name.split('_')[:-1])
+        cell_feature_frames = []
+        for spike_type, type_name in zip(
+            ['AISAP', 'RAAP'],
+            ['AIS-AP', 'RA-AP']
+        ):
+            suffix = f'_juxta{spike_type}'
+            file_path = CellWrapper(
+                cell_info,
+                cell_path.data.parent / f'{cell_name}{suffix}.mat'
+            )
+            cell_spikes = load_spikes(file_path, config['analysis']['extractor'])
+            cell_features = describe_spikes(cell_spikes, config['analysis']['descriptor'])
+            cell_feature_frames.append(
+                cell_features.data.assign(spike_type=type_name)
+            )
+        cell_features = CellWrapper(
+            CellInfo(cell_name, cell_info.cell_type),
+            pd.concat(cell_feature_frames, ignore_index=True)
+        )
+        cell_type_color = '#0000ff'
+    else:
+        raise ValueError(f'Unknown analysis type: {analysis_type}')
 
     # Save features
     output_path = (
         Path(config['output']['path']) /
-        'Preprocessed' /
-        cell_path.cell_type
+        'Results' /
+        cell_features.cell_type
     )
     output_path.mkdir(parents=True, exist_ok=True)
-    cell_features.data.to_csv(output_path / f'{cell_path.name}.csv', index=False)
+    cell_features.data.to_csv(output_path / f'{cell_features.name}.csv', index=False)
 
     # Do plots
     suffixes = config['output']['suffixes']
-    cell_type_color = config['plot']['palette'][cell_features.cell_type]
+    
 
     if config['plot']['selector']['residual_histogram']:
         # Create histogram of noise powers
@@ -109,7 +138,7 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
             'type': 'residual_histogram'
         })
 
-    if config['plot']['selector']['scatter']:
+    if config['plot']['selector']['scatter'] and analysis_type == 'invivo':
         # Create scatter histogram
         cell_figure = create_scatter_histogram(
             cell_features,
@@ -202,9 +231,10 @@ def save_figure(
 
     fig = cell_figure.data
     file_name = f'{cell_figure.name}_{suffix}'
-    for format in config['formats']:
-        figure_path = figure_dir / f'{file_name}.{format}'
-        fig.savefig(figure_path, dpi=config['dpi'])
+    figure_path = figure_dir / f'{file_name}'
+    fig.savefig(f"{figure_path}.png", dpi=config['dpi'], format='png')
+    if config['make_svg']:
+        fig.savefig(f"{figure_path}.svg", dpi=config['dpi'], format='svg')
     plt.close(fig)
     del fig  # Clean up to avoid memory issues
 
