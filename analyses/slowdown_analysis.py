@@ -24,50 +24,6 @@ from data.spikes import SpikeShape, SpikeShapes, load_spike_shapes
 from processors.spike_transformers import create_transformer
 from visualization.spikeshapes import plot_grouped_spikes
 
-def analyze_noise_characteristics(
-    cell_path: CellWrapper[Path],
-    config: dict
-) -> CellWrapper[pd.DataFrame]:
-    """Analyze the noise characteristics of the spikes in a cell.
-    Args:
-        cell_path (CellWrapper[Path]): The path to the cell data.
-        config (dict): Configuration dictionary containing smoothing parameters.
-    Returns:
-        CellWrapper[pd.DataFrame]: A DataFrame containing the noise characteristics.
-    """
-    cell_spikes = load_spikes(cell_path, config['analysis']['extractor'])
-    cell_noise_properties = calculate_noise_properties(cell_spikes, config['analysis']['smooth'])
-
-    # Save features
-    output_path = (
-        Path(config['output']['path']) /
-        'Preprocessed' /
-        cell_path.cell_type
-    )
-    output_path.mkdir(parents=True, exist_ok=True)
-    cell_noise_properties.data.to_csv(
-        output_path / f'{cell_path.name}_noise_powers.csv',
-        index=False
-    )
-
-    noise_property_figure = create_noise_property_histograms(
-        cell_noise_properties,
-        config['plot']
-    )
-    save_figure(
-        noise_property_figure,
-        'noise_properties',
-        config['output']
-    )
-
-    cell_results = {
-        'name': cell_path.name,
-        'type': cell_path.cell_type,
-        'images': []
-    }
-
-    return cell_noise_properties
-
 def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
     """Describe spikes for a cell spread across multiple files."""
 
@@ -84,6 +40,7 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
         cell_features = describe_spikes(cell_spikes, config['analysis']['descriptor'])
         cell_features = categorize_spikes(cell_features, config['analysis']['classification'])
         cell_type_color = config['plot']['palette'][cell_features.cell_type]
+        color_mode = 'cell_type'
     elif analysis_type == 'invitro':
         file_name = cell_path.data.stem
         if file_name.endswith('AISAP'):
@@ -95,10 +52,9 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
             ['AISAP', 'RAAP'],
             ['AIS-AP', 'RA-AP']
         ):
-            suffix = f'_juxta{spike_type}'
             file_path = CellWrapper(
                 cell_info,
-                cell_path.data.parent / f'{cell_name}{suffix}.mat'
+                cell_path.data.parent / f'{cell_name}_juxta{spike_type}.mat'
             )
             cell_spikes = load_spikes(file_path, config['analysis']['extractor'])
             cell_features = describe_spikes(cell_spikes, config['analysis']['descriptor'])
@@ -110,6 +66,7 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
             pd.concat(cell_feature_frames, ignore_index=True)
         )
         cell_type_color = '#0000ff'
+        color_mode = 'spike_type'
     else:
         raise ValueError(f'Unknown analysis type: {analysis_type}')
 
@@ -138,12 +95,14 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
             'type': 'residual_histogram'
         })
 
-    if config['plot']['selector']['scatter'] and analysis_type == 'invivo':
+    if config['plot']['selector']['scatter']:
         # Create scatter histogram
         cell_figure = create_scatter_histogram(
             cell_features,
             config['plot'],
-            tuple(config['analysis']['classification']['groups'][-1]['bottom-left']))
+            tuple(config['analysis']['classification']['groups'][-1]['bottom-left']),
+            color_mode=color_mode
+        )
         figure_path = save_figure(cell_figure, suffixes['scatter'], config['output'])
         cell_results['images'].append({
             'path': figure_path,
@@ -307,15 +266,23 @@ def categorize_spikes(
 def create_scatter_histogram(
     cell_features: CellWrapper[pd.DataFrame],
     plot_config: dict,
-    threshold: tuple[float, float]
+    threshold: tuple[float, float],
+    color_mode: str = 'cell_type'
 ) -> CellWrapper[Figure]:
     """
     Create a scatter histogram of the spike features.
     """
 
+    if color_mode == 'cell_type':
+        labels = cell_features.data['cell_type'].values
+        palette = plot_config['palette']
+    elif color_mode == 'spike_type':
+        labels = cell_features.data['spike_type'].values
+        palette = ['#ff0000', '#0000ff']
+
     binned_features = calculate_sparse_2d_histogram(
         cell_features.data[[f['name'] for f in FEATURES]].values,
-        np.zeros((cell_features.data.shape[0],)),
+        labels,
         plot_config['scatter']['bin_size']
     )
 
@@ -326,7 +293,9 @@ def create_scatter_histogram(
         x='x1',
         y='x2',
         size='ratio',
-        color=plot_config['palette'][cell_features.cell_type],
+        hue='label',
+        palette=palette,
+        #color=plot_config['palette'][cell_features.cell_type],
         sizes=tuple(plot_config['scatter']['point_sizes']),
         ax=ax
     )
@@ -512,6 +481,50 @@ def calculate_snr_from_residuals(
             'snr': 10 * np.log10(np.array(snrs))
         })
     )
+
+def analyze_noise_characteristics(
+    cell_path: CellWrapper[Path],
+    config: dict
+) -> CellWrapper[pd.DataFrame]:
+    """Analyze the noise characteristics of the spikes in a cell.
+    Args:
+        cell_path (CellWrapper[Path]): The path to the cell data.
+        config (dict): Configuration dictionary containing smoothing parameters.
+    Returns:
+        CellWrapper[pd.DataFrame]: A DataFrame containing the noise characteristics.
+    """
+    cell_spikes = load_spikes(cell_path, config['analysis']['extractor'])
+    cell_noise_properties = calculate_noise_properties(cell_spikes, config['analysis']['smooth'])
+
+    # Save features
+    output_path = (
+        Path(config['output']['path']) /
+        'Preprocessed' /
+        cell_path.cell_type
+    )
+    output_path.mkdir(parents=True, exist_ok=True)
+    cell_noise_properties.data.to_csv(
+        output_path / f'{cell_path.name}_noise_powers.csv',
+        index=False
+    )
+
+    noise_property_figure = create_noise_property_histograms(
+        cell_noise_properties,
+        config['plot']
+    )
+    save_figure(
+        noise_property_figure,
+        'noise_properties',
+        config['output']
+    )
+
+    cell_results = {
+        'name': cell_path.name,
+        'type': cell_path.cell_type,
+        'images': []
+    }
+
+    return cell_noise_properties
 
 def calculate_noise_properties(
     spikes: CellWrapper[SpikeShapes],

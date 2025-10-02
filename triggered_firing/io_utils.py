@@ -115,7 +115,7 @@ def list_input_files(
         return selected
 
     for entry in selected:
-        processed_path = make_processed_path(entry.info, data_config['processed_data'])
+        processed_path = make_processed_path(entry.info, data_config['results'])
         if not processed_path.exists():
             raise FileNotFoundError(
                 f'Processed file for {entry.info.name} does not exist.'

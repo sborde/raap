@@ -6,6 +6,7 @@ import pandas as pd
 from scipy.signal import savgol_filter, find_peaks
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.linear_model import LinearRegression
 
 from common.data_utils import PathEntry
 from data.spikes import SpikeShape, load_spike_shapes
@@ -149,6 +150,35 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
             rising_sample_count * params['search_end']['param']['threshold']
         ).astype(int)
 
+    amplitude = v[peak_i] - v[start_i]
+    risetime = spike.times[peak_i] - spike.times[start_i]
+    base_v = float(np.mean(spike.values[:start_i + 1]))
+    start_v = v[start_i]
+    rising_slope = amplitude / risetime if risetime > 0 else np.nan
+
+    if start_i < 2:
+        baseline_slope = np.nan
+    else:
+        X = spike.times[:start_i+1].reshape(-1, 1)
+        y = spike.values[:start_i+1]
+        model = LinearRegression().fit(X, y)
+        baseline_slope = float(model.coef_[0])
+
+    half_amplitude_left, half_amplitude_right = _calculate_halfwidth(
+        spike.times,
+        v,
+        start_i,
+        peak_i
+    )
+    basic_features = {
+        'amplitude': amplitude,
+        'risetime': risetime,
+        'base_v': base_v,
+        'start_v': start_v,
+        'rising_slope': rising_slope,
+        'baseline_slope': baseline_slope,
+        'half_width': half_amplitude_right[0] - half_amplitude_left[0]
+    }
 
     # Calculate the rising phase duration
     dt = np.mean(np.diff(spike.times))
@@ -176,7 +206,7 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
             'rebound_i': [],
             'rebound_time': None,
             'dv_min_peak': None
-        } | noise_properties
+        } | noise_properties | basic_features
 
     features = []
     dv_max_i = np.argmax(dv[:peak_i])
@@ -235,40 +265,87 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
             'rebound_i': [left_level_i + left_peak, right_level_i + left_peak],
             'rebound_time': rebound_time,
             'dv_min_peak': dv_min_peak
-        } | noise_properties)
+        } | noise_properties | basic_features)
 
     return sorted(features, key=lambda x: x['dv_drop'])[-1]
+
+def _calculate_halfwidth(
+    t: np.ndarray,
+    v: np.ndarray,
+    start_i: int,
+    peak_i: int
+) -> tuple[tuple[float, float], tuple[float, float]]:
+    # Calculate the half-width of the spike
+    half_amplitude = (v[peak_i] - v[start_i]) / 2 + v[start_i]
+
+    i = start_i
+    while i < peak_i and v[i + 1] < half_amplitude:
+        i += 1
+    left_time = _calculate_exact_value(
+        (v[i], v[i + 1]), half_amplitude, (t[i], t[i + 1])
+    )
+
+    i = peak_i
+    while i < len(v) - 1 and v[i + 1] > half_amplitude:
+        i += 1
+    right_time = _calculate_exact_value(
+        (v[i], v[i + 1]), half_amplitude, (t[i], t[i + 1])
+    )
+
+    return (
+        (left_time, half_amplitude),
+        (right_time, half_amplitude)
+    )
+
+def _calculate_exact_value(
+    x: tuple[float, float],
+    x_target: float,
+    y: tuple[float, float]
+) -> float:
+    # Linear interpolation to find the exact value at x_target
+    x_left, x_right = x
+    y_left, y_right = y
+    delta_y = y_right - y_left
+    alpha = (x_target - x_left) / (x_right - x_left)
+    return y_left + delta_y * alpha
 
 def convert_features_to_dataframe(features: list[dict]) -> pd.DataFrame:
     """
     Convert the list of features to a pandas DataFrame.
     """
-
     rows = []
     for f in features:
+        t = f['t']
+        v = f['v']
         rows.append({
             'timestamp': f['timestamp'],
+            'amplitude': f['amplitude'],
+            'risetime': f['risetime'],
+            'base_v': f['base_v'],
+            'rising_slope': f['rising_slope'],
+            'baseline_slope': f['baseline_slope'],
+            'half_width': f['half_width'],
             'relative_dv_drop': f['relative_dv_drop'],
             'relative_rebound_time': f['relative_rebound_time'],
             'raw_power': f['raw_power'],
             'smoothed_power': f['smoothed_power'],
             'noise_power': f['noise_power'],
-            'start_t': f['t'][f['start_i']],
-            'start_v': f['v'][f['start_i']],
-            'peak_t': f['t'][np.argmin(np.abs(f['t']))],
-            'peak_v': f['v'][np.argmin(np.abs(f['t']))],
-            'search_start_t': f['t'][f['search_start_i']],
-            'search_start_v': f['v'][f['search_start_i']],
-            'search_end_t': f['t'][f['search_end_i']],
-            'search_end_v': f['v'][f['search_end_i']],
-            'left_peak_t': f['t'][f['left_peak']] if f['left_peak'] is not None else None,
-            'left_peak_v': f['v'][f['left_peak']] if f['left_peak'] is not None else None,
-            'right_peak_t': f['t'][f['right_peak']] if f['right_peak'] is not None else None,
-            'right_peak_v': f['v'][f['right_peak']] if f['right_peak'] is not None else None,
-            'valley_t': f['t'][f['valley_i']] if f['valley_i'] is not None else None,
-            'valley_v': f['v'][f['valley_i']] if f['valley_i'] is not None else None,
-            'rebound_start_t': f['t'][f['rebound_i'][0]] if f['rebound_i'] else None,
-            'rebound_end_t': f['t'][f['rebound_i'][1]] if f['rebound_i'] else None
+            'start_t': t[f['start_i']],
+            'start_v': v[f['start_i']],
+            'peak_t': t[np.argmin(np.abs(f['t']))],
+            'peak_v': v[np.argmin(np.abs(f['t']))],
+            'search_start_t': t[f['search_start_i']],
+            'search_start_v': v[f['search_start_i']],
+            'search_end_t': t[f['search_end_i']],
+            'search_end_v': v[f['search_end_i']],
+            'left_peak_t': t[f['left_peak']] if f['left_peak'] is not None else None,
+            'left_peak_v': v[f['left_peak']] if f['left_peak'] is not None else None,
+            'right_peak_t': t[f['right_peak']] if f['right_peak'] is not None else None,
+            'right_peak_v': v[f['right_peak']] if f['right_peak'] is not None else None,
+            'valley_t': t[f['valley_i']] if f['valley_i'] is not None else None,
+            'valley_v': v[f['valley_i']] if f['valley_i'] is not None else None,
+            'rebound_start_t': t[f['rebound_i'][0]] if f['rebound_i'] else None,
+            'rebound_end_t': t[f['rebound_i'][1]] if f['rebound_i'] else None
         })
 
     return pd.DataFrame(rows)
