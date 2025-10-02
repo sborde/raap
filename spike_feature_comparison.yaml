@@ -1,0 +1,41 @@
+# Paths for the data files
+data:
+  invivo:
+    # Path to the raw data where files are grouped into subdirectories.
+    raw_data:
+      path: C:\Datasets\raap\InVivoJuxta\
+      extension: mat
+    # Path to the processed_data directory with the same structure as raw_data.
+    results:
+      path: C:\tmp\Bozso2025\PutRAAP\Results\NewSpikeDescriptor\InVivo
+      extension: csv
+      suffix:
+  invitro:
+    # Path to the raw data where files are grouped into subdirectories.
+    raw_data:
+      path: C:\Datasets\raap\InVitroJuxtaSorted\Data\mat
+      extension: mat
+    # Path to the processed_data directory with the same structure as raw_data.
+    results:
+      path: C:\tmp\Bozso2025\PutRAAP\Results\NewSpikeDescriptor\InVitro
+      extension: csv
+      suffix:
+input:
+  dataset: invitro
+  mode: directory
+  select_dirs:
+    - juxta
+output:
+  # Set True if you want to save as SVG (PNG is always saved)
+  make_svg: True
+  # dpi of the output png
+  dpi: 100
+params:
+  plot_feature_list:
+    - amplitude
+    - risetime
+    - base_v
+    - start_v
+    - rising_slope
+    - baseline_slope
+    - half_width

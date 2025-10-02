@@ -124,6 +124,26 @@ def list_input_files(
 
     return selected
 
+def list_result_files(
+    data_config: dict, input_config: dict
+) -> list[CellWrapper[Path]]:
+    """
+    List input files based on the data and input configuration.
+    """
+    all_files = list_files_recursively(
+        data_config['results']['path'],
+        data_config['results'].get('extension', 'csv')
+    )
+    selected = [
+        CellWrapper(
+            CellInfo(file_path.stem, file_path.parent.name),
+            file_path
+        ) for file_path in all_files
+        if not need_to_skip(file_path, input_config)
+    ]
+    return selected
+
+
 def load_input_data(
     file_info: CellWrapper[dict[str, Path]]
 ) -> RecordingSpikePair:
