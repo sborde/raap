@@ -1,4 +1,6 @@
 
+from pathlib import Path
+import numpy as np
 import pandas as pd
 import yaml
 
@@ -7,54 +9,86 @@ import seaborn as sns
 
 from scipy.stats import wilcoxon
 
-from triggered_firing.io_utils import list_input_files, list_result_files, load_customized_config
+from triggered_firing.io_utils import list_result_files
 
 
 CONFIG_NAME = 'spike_feature_comparison'
 
 if __name__ == "__main__":
 
-    with open(f"{CONFIG_NAME}.yaml", 'r') as file:
+    with open(f"{CONFIG_NAME}.yaml", 'r', encoding='utf-8') as file:
         # Load the configuration file
         run_config = yaml.safe_load(file)
 
+    params = run_config['params']
+    aggregation_name = params["aggregation"]
+    dataset_name = run_config['input']['dataset']
     input_files = list_result_files(
-        run_config['data'][run_config['input']['dataset']],
+        run_config['data'][dataset_name],
         run_config['input']
     )
     frames = [
         (input_file.name, pd.read_csv(input_file.data)) for input_file in input_files
     ]
 
-    for feature in run_config['params']['plot_feature_list']:
+    if aggregation_name == 'median':
+        aggregate = np.median
+    else:
+        aggregate = np.mean
+
+    result_save_path = (
+        Path(run_config['data'][dataset_name]['results']['path']) /
+        'Results'
+    )
+    result_save_path.mkdir(parents=True, exist_ok=True)
+    figure_save_path = (
+        Path(run_config['data'][dataset_name]['results']['path']) /
+        'Figures'
+    )
+    figure_save_path.mkdir(parents=True, exist_ok=True)
+
+    for feature in params['plot_feature_list']:
         aggregated_results = []
         for name, frame in frames:
+            frame_spikes = []
             for spike_type in frame['spike_type'].unique():
                 subset = frame[frame['spike_type'] == spike_type]
-                aggregated_results.append({
+                frame_spikes.append({
                     'name': name,
-                    'mean': subset[feature].mean(),
+                    'value': aggregate(subset[feature]),
                     'spike_type': spike_type
                 })
-        result_df = pd.DataFrame(aggregated_results)
-        plt.figure(figsize=(8, 6))
+            cell_result = pd.DataFrame(frame_spikes)
+            if (
+                'AIS-AP' in cell_result['spike_type'].values and
+                'RA-AP' in cell_result['spike_type'].values
+            ):
+                aggregated_results.append(cell_result)
+            else:
+                print(f"Skipping {name} due to missing spike types")
+        result_df = pd.concat(aggregated_results)
+        result_df.to_excel(
+            result_save_path / f'{feature}_comparison.xlsx', index=False
+        )
+
+        fig = plt.figure(figsize=(8, 6))
         sns.boxplot(
             x='spike_type',
-            y='mean',
+            y='value',
             fill=False,
             fliersize=0,
             color='#808080',
             data=result_df
         )
         res = wilcoxon(
-            result_df[result_df['spike_type'] == 'AIS-AP']['mean'],
-            result_df[result_df['spike_type'] == 'RA-AP']['mean']
+            result_df[result_df['spike_type'] == 'AIS-AP']['value'],
+            result_df[result_df['spike_type'] == 'RA-AP']['value']
         )
         for name in result_df['name'].unique():
             subset = result_df[result_df['name'] == name]
             plt.plot(
                 subset['spike_type'],
-                subset['mean'],
+                subset['value'],
                 markersize=10,
                 marker='o',
                 linestyle='-',
@@ -62,9 +96,10 @@ if __name__ == "__main__":
                 linewidth=2,
             )
 
-        plt.title(f'Comparison of {feature}, p={res.pvalue:.3f}')
-        plt.ylabel(f'Mean {feature}')
-        plt.show()
+        plt.title(f'Comparison of {feature}, p={res.pvalue:.3f}') # type: ignore
+        plt.ylabel(f'{aggregation_name.capitalize()} {feature}')
+        plt.savefig(figure_save_path / f'{aggregation_name}_{feature}_comparison.png')
+        plt.close(fig)
 
     # if run_config['grouping']['do']:
     #     run_config['output']['suffix'] = analysis.suffix + '_histogram'
