@@ -150,6 +150,14 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
             rising_sample_count * params['search_end']['param']['threshold']
         ).astype(int)
 
+    try:
+        half_amplitude_left, half_amplitude_right = _calculate_halfwidth(
+            spike.times, v, start_i, peak_i
+        )
+    except ValueError:
+        print("[INFO] Half-width not found, skip spike.")
+        return None
+
     amplitude = v[peak_i] - v[start_i]
     risetime = spike.times[peak_i] - spike.times[start_i]
     base_v = float(np.mean(spike.values[:start_i + 1]))
@@ -164,12 +172,6 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
         model = LinearRegression().fit(X, y)
         baseline_slope = float(model.coef_[0])
 
-    half_amplitude_left, half_amplitude_right = _calculate_halfwidth(
-        spike.times,
-        v,
-        start_i,
-        peak_i
-    )
     basic_features = {
         'amplitude': amplitude,
         'risetime': risetime,
@@ -288,6 +290,11 @@ def _calculate_halfwidth(
     i = peak_i
     while i < len(v) - 1 and v[i + 1] > half_amplitude:
         i += 1
+
+
+    if i == len(v) - 1:
+        raise ValueError('Half-width right side not found.')
+
     right_time = _calculate_exact_value(
         (v[i], v[i + 1]), half_amplitude, (t[i], t[i + 1])
     )
