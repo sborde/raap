@@ -48,6 +48,7 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
         cell_info = cell_path.info
         cell_name = '_'.join(file_name.split('_')[:-1])
         cell_feature_frames = []
+        cell_spike_shapes = []
         for spike_type, type_name in zip(
             ['AISAP', 'RAAP'],
             ['AIS-AP', 'RA-AP']
@@ -61,9 +62,20 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
             cell_feature_frames.append(
                 cell_features.data.assign(spike_type=type_name)
             )
+            cell_spike_shapes.append(cell_spikes.data)
+        combined_cell_info = CellInfo(cell_name, cell_info.cell_type)
         cell_features = CellWrapper(
-            CellInfo(cell_name, cell_info.cell_type),
+            combined_cell_info,
             pd.concat(cell_feature_frames, ignore_index=True)
+        )
+        cell_spikes = CellWrapper(
+            combined_cell_info,
+            SpikeShapes(
+                cell_spike_shapes[0][0].times,
+                np.vstack([shapes.segments.values for shapes in cell_spike_shapes]),
+                np.vstack([shapes.timestamps for shapes in cell_spike_shapes]),
+                cell_spike_shapes[0].dt
+            )
         )
         cell_type_color = '#0000ff'
         color_mode = 'spike_type'
@@ -81,7 +93,7 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
 
     # Do plots
     suffixes = config['output']['suffixes']
-    
+
 
     if config['plot']['selector']['residual_histogram']:
         # Create histogram of noise powers
@@ -278,7 +290,9 @@ def create_scatter_histogram(
         palette = plot_config['palette']
     elif color_mode == 'spike_type':
         labels = cell_features.data['spike_type'].values
-        palette = ['#ff0000', '#0000ff']
+        palette = ['#0000ff', '#ff0000']
+    else:
+        raise ValueError(f'Unknown color mode: {color_mode}')
 
     binned_features = calculate_sparse_2d_histogram(
         cell_features.data[[f['name'] for f in FEATURES]].values,
