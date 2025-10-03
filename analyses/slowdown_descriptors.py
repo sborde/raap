@@ -107,11 +107,23 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
     if 'smooth' in params and params['smooth']:
         v = savgol_filter(v, **params['smooth'])
 
+        raw_power = np.mean(spike.values ** 2)
+        noise_power = np.mean((spike.values - v) ** 2)
         noise_properties = {
-            'raw_power': np.mean(spike.values ** 2),
+            'raw_power': raw_power,
             'smoothed_power': np.mean(v ** 2),
-            'noise_power': np.mean((spike.values - v) ** 2)
+            'noise_power': noise_power
         }
+
+        noise_limit = params.get('noise_limit')
+        if noise_limit is not None:
+            noise_ratio = (noise_power / raw_power) * 100
+            if noise_ratio > noise_limit:
+                print(
+                    f"[INFO] Spike {spike.timestamp}'s noise ratio "
+                    "is above limit, skip spike."
+                )
+                return None
     else:
         noise_properties = {
             'raw_power': np.nan,

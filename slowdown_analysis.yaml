@@ -87,6 +87,8 @@ analysis:
     smooth:
       window_length: 5
       polyorder: 3
+    # Noise threshold above which a spike is dropped, leave empty to disable
+    noise_limit:
     # dV threshold to detect spike start as a proportion of the max dV
     start_threshold: 0.1
     # Where to begin the description
