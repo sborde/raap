@@ -73,7 +73,7 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
             SpikeShapes(
                 cell_spike_shapes[0][0].times,
                 np.vstack([shapes.segments.values for shapes in cell_spike_shapes]),
-                np.vstack([shapes.timestamps for shapes in cell_spike_shapes]),
+                np.concatenate([shapes.timestamps for shapes in cell_spike_shapes], axis=0),
                 cell_spike_shapes[0].dt
             )
         )
