@@ -40,6 +40,7 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
         cell_features = describe_spikes(cell_spikes, config['analysis']['descriptor'])
         cell_features = categorize_spikes(cell_features, config['analysis']['classification'])
         cell_type_color = config['plot']['palette'][cell_features.cell_type]
+        cell_features.data['cell_type'] = cell_features.cell_type
         color_mode = 'cell_type'
     elif analysis_type == 'invitro':
         file_name = cell_path.data.stem
