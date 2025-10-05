@@ -15,6 +15,7 @@ DIR_PATH = 'E:/Data/BogiSejtek/PutRAAP/Results/20250804/Preprocessed/RSI_L2-3'
 BIN_RANGE = (0, 0.005)
 BIN_COUNT = 100
 HIST_COLOR = '#808080'
+NOISE_THRESHOLD = 0.0025
 
 if __name__ == "__main__":
 
@@ -30,18 +31,34 @@ if __name__ == "__main__":
         df['name'] = path.stem
         frames.append(df)
     pool_df = pd.concat(frames, ignore_index=True)
-    pool_df.to_csv(
-        save_path / 'Pooled_Noise_Characteristics.csv', index=False
+    pool_df.to_excel(
+        save_path / 'Pooled_Noise_Characteristics.xlsx', index=False
     )
 
     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-    ax.hist(
-        pool_df['noise_ratio'],
-        bins=BIN_COUNT,
-        range=BIN_RANGE,
-        color=HIST_COLOR,
-        alpha=0.7
-    )
+    if NOISE_THRESHOLD is None:
+        ax.hist(
+            pool_df['noise_ratio'],
+            bins=BIN_COUNT,
+            range=BIN_RANGE,
+            color=HIST_COLOR,
+            alpha=0.7
+        )
+    else:
+        flags = [
+            pool_df['noise_ratio'] <= NOISE_THRESHOLD,
+            pool_df['noise_ratio'] > NOISE_THRESHOLD
+        ]
+        for flag in flags:
+            if not np.any(flag):
+                continue
+            ax.hist(
+                pool_df[flag]['noise_ratio'],
+                bins=BIN_COUNT,
+                range=BIN_RANGE,
+                color=HIST_COLOR,
+                alpha=0.7
+            )
     ax.set_title(
         f"{group_name} - Noise to Raw Power Ratio (%)"
     )
@@ -67,6 +84,14 @@ if __name__ == "__main__":
             np.full_like(frame['noise_ratio'], i),
             'o'
         )
+    if NOISE_THRESHOLD is not None:
+        ax.axvline(
+            NOISE_THRESHOLD,
+            color='r',
+            linestyle='--',
+            label='Noise Threshold'
+        )
+        ax.legend()
     ax.set_xlabel('Noise to Raw Power Ratio (%)')
     ax.set_yticks(np.arange(len(frames)))
     ax.set_yticklabels([f['name'].iloc[0] for f in frames])
@@ -76,3 +101,27 @@ if __name__ == "__main__":
         format='svg'
     )
     plt.close(fig)
+
+    aggregates = []
+    for frame in frames:
+        iqr = np.diff(np.percentile(frame['noise_ratio'], [25, 75]))
+        outlier_threshold = np.percentile(frame['noise_ratio'], 75) + 1.5 * iqr
+        frame_aggregate = pd.DataFrame({
+            'name': frame['name'].iloc[0],
+            'mean_noise_ratio': frame['noise_ratio'].mean(),
+            'std_noise_ratio': frame['noise_ratio'].std(),
+            'median_noise_ratio': frame['noise_ratio'].median(),
+            'q1_noise_ratio': np.percentile(frame['noise_ratio'], 25),
+            'q3_noise_ratio': np.percentile(frame['noise_ratio'], 75),
+            'outlier_threshold': outlier_threshold,
+            'outlier_ratio': np.mean(frame['noise_ratio'] > outlier_threshold)
+        })
+        if NOISE_THRESHOLD is not None:
+            frame_aggregate['above_threshold_ratio'] = np.mean(
+                frame['noise_ratio'] > NOISE_THRESHOLD
+            )
+        aggregates.append(frame_aggregate)
+    aggregate_df = pd.concat(aggregates, ignore_index=True)
+    aggregate_df.to_excel(
+        save_path / 'Cellwise_Noise_Aggregates.xlsx', index=False
+    )
