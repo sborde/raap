@@ -90,7 +90,7 @@ def find_rise_start_index(
     # find the first index where the rising phase exceeds the threshold
     return np.where(rising_phase > threshold_level)[0][0] + start_i
 
-def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
+def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | int:
     """
     Calculate the features of the spike rising phase.
     """
@@ -100,7 +100,7 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
 
     # if the start cannot be detected, return None
     if start_i is None:
-        return None
+        return 1
 
     noise_properties = {}
     v = spike.values
@@ -123,7 +123,7 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
                     f"[INFO] Spike {spike.timestamp}'s noise ratio "
                     "is above limit, skip spike."
                 )
-                return None
+                return 2
     else:
         noise_properties = {
             'raw_power': np.nan,
@@ -168,7 +168,7 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | None:
         )
     except ValueError:
         print("[INFO] Half-width not found, skip spike.")
-        return None
+        return 3
 
     amplitude = v[peak_i] - v[start_i]
     risetime = spike.times[peak_i] - spike.times[start_i]

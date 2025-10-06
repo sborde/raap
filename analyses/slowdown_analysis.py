@@ -241,13 +241,32 @@ def describe_spikes(
         return calculate_rising_features(spike, config)
 
     features = [describe(i, spike) for i, spike in enumerate(spikes)]
-    features = [f for f in features if f is not None]
+    start_detection_error = sum(
+        1 for f in features if (isinstance(f, int) and f == 1)
+    )
+    too_noisy_error = sum(
+        1 for f in features if (isinstance(f, int) and f == 2)
+    )
+    half_width_error = sum(
+        1 for f in features if (isinstance(f, int) and f == 3)
+    )
+    features = [f for f in features if isinstance(f, dict)]
     print()
 
     if len(features) < len(spikes):
         n_errors = len(spikes) - len(features)
-        print(f'[INFO]: {n_errors} spike\'s start couldn\'t be detected.')
+        print(f'[INFO]: {start_detection_error} spike\'s start couldn\'t be detected.')
+        print(f'[INFO]: {too_noisy_error} spike\'s noise ratio is too high.')
+        print(f'[INFO]: {half_width_error} spike\'s half-width couldn\'t be determined.')
+        print(f'[INFO]: {n_errors} spikes were skipped in total.')
 
+    noisiness_ratio = too_noisy_error / len(spikes)
+    if config.get('noisiness_threshold') is not None:
+        if noisiness_ratio > config['noisiness_threshold']:
+            raise ValueError(
+                f"[INFO]: Cell {cell_spikes.name} is too noisy, "
+                f"should be skipped. ({too_noisy_error}/{len(spikes)} spikes dropped)"
+            )
     feature_frame = convert_features_to_dataframe(features)
 
     return CellWrapper[pd.DataFrame](cell_spikes.info, feature_frame)
