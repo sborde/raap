@@ -64,14 +64,14 @@ class BasicSpikeFeatureDescription:
         # Describe the spikes and extract features
         features = list(filter(
             lambda x: x is not None,
-            [self._describe_spike(spike) for spike in spikes]
+            [self.describe_spike(spike) for spike in spikes]
         ))
         if len(features) < len(spikes):
             n_errors = len(spikes) - len(features)
             print(f"[INFO]: {n_errors} spike's start couldn't be detected.")
         return features # type: ignore
 
-    def _describe_spike(
+    def describe_spike(
         self,
         spike: SpikeShape
     ) -> Optional[tuple[PreparedSpikeShape, dict]]:

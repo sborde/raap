@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import yaml
 
 from common.data_utils import CellWrapper, CellInfo
@@ -20,6 +22,81 @@ def load_config(path: str) -> dict:
         encoding='utf-8'
     ) as file:
         return yaml.safe_load(file)
+
+def list_input_from_table(
+    data_config: dict, input_config: dict, processed: bool = True
+) -> list[CellWrapper[dict[str, Path]]]:
+    """
+    List input files based on a table file.
+    Args:
+        path (str): Path to the table file.
+    Returns:
+        list[CellWrapper[Path]]: List of CellWrapper objects containing cell info and file paths.
+    """
+    table_path = Path(input_config['table_path'])
+    if not table_path.exists():
+        raise FileNotFoundError(f"Table file {table_path} does not exist.")
+
+    table = pd.read_excel(table_path, index_col=0)
+    rules = input_config.get('select_rules', [])
+    flag = np.zeros(len(table), dtype=bool)
+    for rule in rules:
+        rule_flag = np.ones(len(table), dtype=bool)
+        for column, value in rule.items():
+            rule_flag &= (table[column] == value)
+        flag |= rule_flag
+
+    dataset_config = data_config[input_config['dataset']]
+    table = table[flag]
+    entries = []
+    for _, row in table.iterrows():
+        row_dict = row.to_dict()
+        cell_info = CellInfo(row_dict['name'], row_dict.get('group', ''))
+        raw_path = (
+            Path(dataset_config['raw_data']['path']) /
+            cell_info.cell_type /
+            f"{cell_info.name}.mat"
+        )
+        if not raw_path.exists():
+            raise FileNotFoundError(f"Raw file {raw_path} does not exist.")
+        entry = CellWrapper(cell_info, {'raw': raw_path})
+
+        if processed:
+            processed_path = make_processed_path(entry.info, dataset_config['results'])
+            if not processed_path.exists():
+                raise FileNotFoundError(
+                    f'Processed file for {entry.info.name} does not exist.'
+                )
+            entry.data['processed'] = processed_path
+
+        entries.append(entry)
+    return entries
+
+def get_cell_info_list(input_config: dict) -> list[CellInfo]:
+    """
+    Get a list of CellInfo objects based on a table file.
+    Args:
+        input_config (dict): Input configuration containing the table path.
+    """
+    table_path = Path(input_config['table_path'])
+    if not table_path.exists():
+        raise FileNotFoundError(f"Table file {table_path} does not exist.")
+
+    table = pd.read_excel(table_path, index_col=0)
+    rules = input_config.get('select_rules', [])
+    flag = np.zeros(len(table), dtype=bool)
+    for rule in rules:
+        rule_flag = np.ones(len(table), dtype=bool)
+        for column, value in rule.items():
+            rule_flag &= (table[column] == value)
+        flag |= rule_flag
+
+    table = table[flag]
+    entries = [
+        CellInfo(row['name'], row.get('group', ''))
+        for _, row in table.iterrows()
+    ]
+    return entries
 
 def list_input_files(
     data_config: dict, input_config: dict, processed: bool = True

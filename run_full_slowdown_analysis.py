@@ -18,7 +18,7 @@ from pathlib import Path
 
 from analyses.slowdown_analysis import analyze_cell
 from common.data_utils import CellWrapper
-from utils.file_utils import enumerate_input_files, list_input_files
+from utils.file_utils import enumerate_input_files, get_cell_info_list, list_input_files
 from utils.report_generators import compose_textfile
 
 def generate_report(
@@ -64,6 +64,10 @@ def run_slowdown_analysis(config: dict) -> None:
         Generates a report from the figure dictionaries.
         """
         generate_report(figure_dicts, report_composer)
+
+    entries = get_cell_info_list(config['input'])
+    [print(f"Cell: {entry.name}, Group: {entry.cell_type}") for entry in entries]
+    input()
 
     # cells = enumerate_input_files(config)
     cells = list_input_files(

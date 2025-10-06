@@ -45,13 +45,26 @@ data:
 # select_files:
 #   - file1.mat
 #   - file2.mat
+# If you set mode to table, the input files are going to be loaded from an
+# Excel table. The table must contain a column with the filenames (without extension).
+# If the files are organized into subdirectories, a directory column is needed.
+# Besides that, any other columns can be present and can be used for selection.
+# Selection rules can be set as a logical expression. Each rule is a "dictionary",
+# where the key is the column name, and the value is a list of accepted values.
+# If you provide a list of rules, they are interpreted with OR logic. If you 
+# dont't set any rules, all files in the table are selected.
+# Example:
+# mode: table
+#  - table_path: <path to the Excel table>
+#  select_files: list of names to select
+#  skip_files: list of names to skip
 input:
   dataset: invitro
-  mode: directory
-  select_dirs:
-    - juxta
-    # - RSI_L2-3
-    # - FSI_L2-3
+  mode: table
+  table_path: C:\Users\g\Downloads\data_invivo.xlsx
+  select_rules:
+    - noisy: 1
+      raap: 1
 # Output parameters
 output:
   # Set True if you want to save as SVG (PNG is always saved)
@@ -89,6 +102,8 @@ analysis:
       polyorder: 3
     # Noise threshold above which a spike is dropped, leave empty to disable
     noise_limit:
+    # Ratio of the skipped files to discard the cell
+    noisiness_threshold: 0.15
     # dV threshold to detect spike start as a proportion of the max dV
     start_threshold: 0.1
     # Where to begin the description
