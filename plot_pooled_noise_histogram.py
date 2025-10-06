@@ -31,13 +31,36 @@ if __name__ == "__main__":
         df['name'] = path.stem
         frames.append(df)
     pool_df = pd.concat(frames, ignore_index=True)
-    pool_df.to_excel(
-        save_path / 'Pooled_Noise_Characteristics.xlsx', index=False
+    pool_df.to_csv(
+        save_path / f'{group_name}_Pooled_Noise_Characteristics.csv',
+        index=False
     )
 
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+    if np.any(np.isnan(pool_df['noise_ratio'])):
+        n_nans = np.sum(pool_df['noise_ratio'].isna())
+        nan_ratio = n_nans / len(pool_df) * 100
+        print(f"Number of NaNs: {n_nans}/{len(pool_df)} ({nan_ratio:.2f}%)")
+        print(pool_df.loc[pool_df['noise_ratio'].isna()])
+        pool_df = pool_df.loc[~pool_df['noise_ratio'].isna()]
+
+    fig, ax = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
+
+    ax[0].boxplot(
+        pool_df['noise_ratio'],
+        vert=False,
+        boxprops={'color': HIST_COLOR},
+        showfliers=False
+    )
+    ax[0].set_title(
+        f"{group_name} - Noise-to-Raw Power Ratio (%)"
+    )
+
+    pool_q3 = np.percentile(pool_df['noise_ratio'], 75)
+    pool_iqr = np.diff(np.percentile(pool_df['noise_ratio'], [25, 75]))
+    outlier_threshold = pool_q3 + 1.5 * pool_iqr
+
     if NOISE_THRESHOLD is None:
-        ax.hist(
+        ax[1].hist(
             pool_df['noise_ratio'],
             bins=BIN_COUNT,
             range=BIN_RANGE,
@@ -52,29 +75,20 @@ if __name__ == "__main__":
         for flag in flags:
             if not np.any(flag):
                 continue
-            ax.hist(
+            ax[1].hist(
                 pool_df[flag]['noise_ratio'],
                 bins=BIN_COUNT,
                 range=BIN_RANGE,
                 color=HIST_COLOR,
                 alpha=0.7
             )
-    ax.set_title(
-        f"{group_name} - Noise to Raw Power Ratio (%)"
+    ax[1].axvline(
+        outlier_threshold,
+        color='orange',
+        linestyle='--'
     )
-    fig.savefig(save_path / f'{group_name}_Pooled_Noise_Histogram.png')
-    plt.close(fig)
 
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-    ax.boxplot(
-        pool_df['noise_ratio'],
-        vert=False,
-        boxprops=dict(color=HIST_COLOR)
-    )
-    ax.set_title(
-        f"{group_name} - Noise to Raw Power Ratio (%)"
-    )
-    fig.savefig(save_path / f'{group_name}_Pooled_Noise_Boxplot.png')
+    fig.savefig(save_path / f'{group_name}_Pooled_Noise_Distribution.png')
     plt.close(fig)
 
     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
@@ -122,6 +136,6 @@ if __name__ == "__main__":
             )
         aggregates.append(frame_aggregate)
     aggregate_df = pd.concat(aggregates, ignore_index=True)
-    aggregate_df.to_excel(
-        save_path / 'Cellwise_Noise_Aggregates.xlsx', index=False
+    aggregate_df.to_csv(
+        save_path / 'Cellwise_Noise_Aggregates.csv', index=False
     )
