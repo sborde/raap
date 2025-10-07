@@ -102,9 +102,15 @@ if __name__ == "__main__":
 
         plt.title(f'Comparison of {feature}, p={res.pvalue:.3f}') # type: ignore
         plt.ylabel(f'{aggregation_name.capitalize()} {feature}')
-        plt.savefig(figure_save_path / f'{aggregation_name}_{feature}_comparison.png')
+        figure_name = f'{aggregation_name}_{feature}_comparison'
+        plt.savefig(
+            figure_save_path / f'{figure_name}.png',
+            dpi=config['output']['dpi'],
+            format='png'
+        )
+        if config['output']['make_svg']:
+            plt.savefig(
+                figure_save_path / f'{figure_name}.svg',
+                format='svg'
+            )
         plt.close(fig)
-
-    # if run_config['grouping']['do']:
-    #     run_config['output']['suffix'] = analysis.suffix + '_histogram'
-    #     run_grouped_analysis(run_config)
