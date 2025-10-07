@@ -18,14 +18,15 @@ if __name__ == "__main__":
 
     with open(f"{CONFIG_NAME}.yaml", 'r', encoding='utf-8') as file:
         # Load the configuration file
-        run_config = yaml.safe_load(file)
+        config = yaml.safe_load(file)
 
-    params = run_config['params']
+    params = config['params']
+    spike_types = params['spike_types']
     aggregation_name = params["aggregation"]
-    dataset_name = run_config['input']['dataset']
+    dataset_name = config['input']['dataset']
     input_files = list_result_files(
-        run_config['data'][dataset_name],
-        run_config['input']
+        config['data'][dataset_name],
+        config['input']
     )
     frames = [
         (input_file.name, pd.read_csv(input_file.data)) for input_file in input_files
@@ -37,12 +38,12 @@ if __name__ == "__main__":
         aggregate = np.mean
 
     result_save_path = (
-        Path(run_config['data'][dataset_name]['results']['path']) /
+        Path(config['data'][dataset_name]['results']['path']) /
         'Results'
     )
     result_save_path.mkdir(parents=True, exist_ok=True)
     figure_save_path = (
-        Path(run_config['data'][dataset_name]['results']['path']) /
+        Path(config['data'][dataset_name]['results']['path']) /
         'Figures'
     )
     figure_save_path.mkdir(parents=True, exist_ok=True)
@@ -51,7 +52,7 @@ if __name__ == "__main__":
         aggregated_results = []
         for name, frame in frames:
             frame_spikes = []
-            for spike_type in frame['spike_type'].unique():
+            for spike_type in spike_types:
                 subset = frame[frame['spike_type'] == spike_type]
                 frame_spikes.append({
                     'name': name,
@@ -69,6 +70,9 @@ if __name__ == "__main__":
         result_df = pd.concat(aggregated_results)
         result_df.to_excel(
             result_save_path / f'{feature}_comparison.xlsx', index=False
+        )
+        result_df['spike_type'] = pd.Categorical(
+            result_df['spike_type'], categories=spike_types, ordered=True
         )
 
         fig = plt.figure(figsize=(8, 6))

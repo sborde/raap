@@ -40,3 +40,7 @@ params:
     - rising_slope
     - baseline_slope
     - half_width
+  spike_types:
+    - AIS-AP
+    - UNDEFINED
+    - RA-AP
