@@ -5,6 +5,7 @@ import abc
 from typing import Callable, Protocol
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from signalizer.model.experiment.recordings import MatRecording
@@ -19,8 +20,6 @@ class FileChecker(Protocol):
     @abc.abstractmethod
     def __call__(self, path: Path) -> bool:
         """Checks if the file at the given path should be included."""
-
-
 
 
 CellEnumerator = Callable[[dict], list[CellWrapper[Path]]]
@@ -38,6 +37,31 @@ class ResultPaths:
             pd.read_csv(self.processed.as_posix(), index_col=None)
         )
 
+def get_cell_info_list(input_config: dict) -> list[CellInfo]:
+    """
+    Get a list of CellInfo objects based on a table file.
+    Args:
+        input_config (dict): Input configuration containing the table path.
+    """
+    table_path = Path(input_config['table_path'])
+    if not table_path.exists():
+        raise FileNotFoundError(f"Table file {table_path} does not exist.")
+
+    table = pd.read_excel(table_path, index_col=0)
+    rules = input_config.get('select_rules', [])
+    flag = np.zeros(len(table), dtype=bool)
+    for rule in rules:
+        rule_flag = np.ones(len(table), dtype=bool)
+        for column, value in rule.items():
+            rule_flag &= (table[column] == value)
+        flag |= rule_flag
+
+    table = table[flag]
+    entries = [
+        CellInfo(row['name'], row.get('group', ''))
+        for _, row in table.iterrows()
+    ]
+    return entries
 
 def list_input_files(
     paths: dict, input_config: dict
@@ -63,15 +87,38 @@ def list_input_files(
         )
     return outputs
 
-def list_selected_files(path: str, ext: str, checker: FileChecker) -> list[CellWrapper[Path]]:
-    """Lists paths of the raw data that conforms the selection conditions."""
-    return [
-        CellWrapper(
-            CellInfo(file_path.stem, file_path.parent.name), file_path
+def collect_path_for_infos(
+    infos: list[CellInfo], paths: dict
+) -> list[CellWrapper[ResultPaths]]:
+    """
+    Collects paths for the given cell infos based on the data configuration.
+    Args:
+        infos (list[CellInfo]): List of CellInfo objects.
+        paths (dict): Data configuration containing paths.
+    Returns:
+        list[CellWrapper[ResultPaths]]: List of CellWrapper objects with paths.
+    """
+    outputs = []
+    for info in infos:
+        raw_path = (
+            Path(paths['raw_data']['path']) /
+            info.cell_type /
+            f"{info.name}.{paths['raw_data']['extension']}"
         )
-        for file_path in Path(path).glob(f'**/*.{ext}')
-        if checker(file_path)
-    ]
+        if not raw_path.exists():
+            raise FileNotFoundError(f"Raw file {raw_path} does not exist.")
+        results_path = get_processed_path(info, paths['results'])
+        if not results_path.exists():
+            raise FileNotFoundError(
+                f'Processed file for {info.name} does not exist.'
+            )
+        outputs.append(
+            CellWrapper(
+                info,
+                ResultPaths(raw_path, results_path)
+            )
+        )
+    return outputs
 
 def create_file_lister(input_config: dict) -> CellEnumerator:
     """
@@ -82,6 +129,16 @@ def create_file_lister(input_config: dict) -> CellEnumerator:
     return lambda config: list_selected_files(
         config['path'], config['extension'], checker
     )
+
+def list_selected_files(path: str, ext: str, checker: FileChecker) -> list[CellWrapper[Path]]:
+    """Lists paths of the raw data that conforms the selection conditions."""
+    return [
+        CellWrapper(
+            CellInfo(file_path.stem, file_path.parent.name), file_path
+        )
+        for file_path in Path(path).glob(f'**/*.{ext}')
+        if checker(file_path)
+    ]
 
 def create_file_checker(config: dict) -> FileChecker:
     """

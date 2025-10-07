@@ -72,32 +72,6 @@ def list_input_from_table(
         entries.append(entry)
     return entries
 
-def get_cell_info_list(input_config: dict) -> list[CellInfo]:
-    """
-    Get a list of CellInfo objects based on a table file.
-    Args:
-        input_config (dict): Input configuration containing the table path.
-    """
-    table_path = Path(input_config['table_path'])
-    if not table_path.exists():
-        raise FileNotFoundError(f"Table file {table_path} does not exist.")
-
-    table = pd.read_excel(table_path, index_col=0)
-    rules = input_config.get('select_rules', [])
-    flag = np.zeros(len(table), dtype=bool)
-    for rule in rules:
-        rule_flag = np.ones(len(table), dtype=bool)
-        for column, value in rule.items():
-            rule_flag &= (table[column] == value)
-        flag |= rule_flag
-
-    table = table[flag]
-    entries = [
-        CellInfo(row['name'], row.get('group', ''))
-        for _, row in table.iterrows()
-    ]
-    return entries
-
 def list_input_files(
     data_config: dict, input_config: dict, processed: bool = True
 ) -> list[CellWrapper[dict[str, Path]]]:

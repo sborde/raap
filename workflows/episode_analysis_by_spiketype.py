@@ -56,36 +56,15 @@ class EpisodeFiringBySpikeType:
                 )
                 continue
         result = pd.concat(result_list, ignore_index=True)
+
+        result_dir = self._output_dirs['figures'] / cell.info.cell_type
+        result_dir.mkdir(parents=True, exist_ok=True)
         result.to_excel(
-            self._output_dirs['results'] /
+            result_dir /
             f"{cell.info.name}_episode_firing_rate_by_spiketype.xlsx",
             index=False
         )
         return CellWrapper(cell.info, result)
-
-    def run_grouped(self, results: list[CellWrapper[DataFrame]]):
-        """
-        Aggregate the results from multiple cells into a single DataFrame.
-        """
-        groups = get_grouping(self._grouping, results)
-        for group in groups:
-            aggregate = pd.concat([
-                member.data.groupby(['episode']).mean().reset_index()
-                for member in group.cells
-            ], ignore_index=True)
-
-            self._plot_results_grouped(group.name, aggregate)
-
-            if not self._output_dirs['stats']:
-                raise RuntimeError("Output directory not set.")
-            group_dir = self._output_dirs['stats'] / 'grouped'
-            group_dir.mkdir(parents=True, exist_ok=True)
-
-            # Save to file
-            aggregate.to_csv(
-                group_dir / f"group_{group.name:02d}_spike_episode_stats.csv",
-                index=False
-            )
 
     def _process_episode(self, data: RecordingWithSpikes, name: str) -> DataFrame:
         """
@@ -109,90 +88,3 @@ class EpisodeFiringBySpikeType:
                     is_within & (spikes['spike_type'] == spike_type)
                 ) / duration
         return DataFrame(result, index=[0])
-
-    def _plot_results_individual(self, info: CellInfo, stats: DataFrame):
-        """
-        Plots the ratios of spike types across different sleep episodes.
-        """
-        if not self._output_dirs['figures']:
-            raise RuntimeError("Output directory not set.")
-        group_dir = self._output_dirs['figures'] / info.cell_type
-        group_dir.mkdir(parents=True, exist_ok=True)
-        self._make_plot(stats, group_dir.as_posix(), info.name)
-
-    def _plot_results_grouped(self, group_name: str, stats: DataFrame):
-        """
-        Plots the grouped results for each spike type.
-        """
-        if not self._output_dirs['figures']:
-            raise RuntimeError("Output directory not set.")
-        group_dir = self._output_dirs['figures'] / 'grouped'
-        group_dir.mkdir(parents=True, exist_ok=True)
-        self._make_plot(stats, group_dir.as_posix(), group_name)
-
-    def _make_plot(self, statistics: DataFrame, path: str, title: str):
-        stats = statistics.copy()
-        for state_group_name in stats['group'].unique():
-            group_stats = stats[stats['group'] == state_group_name]
-            state_type = group_stats['type'].iloc[0]
-
-            if state_type == 'trigger':
-                group_name = group_stats['group'].iloc[0]
-                states = [
-                    f'yes_{group_name}',
-                    f'no_{group_name}'
-                ]
-                palette = [
-                    self._palette['trigger'][group_name],
-                    self._palette['trigger']['none']
-                ]
-                stats['state'] = pd.Categorical(
-                    stats['state'],
-                    categories=states,
-                    ordered=True
-                )
-            else:
-                states = []
-                palette = []
-                for episode_group in self._episodes:
-                    if episode_group['name'] == state_group_name:
-                        for episode_name in episode_group['episodes'] + ['none']:
-                            states.append(episode_name)
-                            palette.append(self._palette['episode'][episode_name])
-                        break
-
-            plot_data = []
-            for spike_type in self._spike_types:
-                values = []
-                spike_stats = group_stats[group_stats['spike_type'] == spike_type]
-                for state in states:
-                    state_value = spike_stats[spike_stats['state'] == state]['ratio'].values
-                    values.append(state_value)
-                plot_data.append((
-                    spike_type,
-                    CategoricalDistribution(
-                        np.array(values),
-                        states,
-                        state_group_name
-                    )
-                ))
-            fig, ax = plt.subplots(figsize=self._plot_params['figsize'])
-            create_stacked_area_chart(
-                plot_data,
-                ax,
-                params={
-                    'figsize': (10, 6),
-                    'palette': palette
-                }
-            )
-            plt.xlabel('Spike Type')
-            plt.ylabel('Ratio')
-            plt.tight_layout()
-            plt.title(title)
-
-            fig.savefig(
-                Path(path) /
-                f"{title}_spiketype_{state_group_name}_ratio.png",
-                dpi=100
-            )
-            plt.close(fig)

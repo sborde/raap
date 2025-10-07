@@ -18,8 +18,9 @@ from pathlib import Path
 
 from analyses.slowdown_analysis import analyze_cell
 from common.data_utils import CellWrapper
-from utils.file_utils import enumerate_input_files, get_cell_info_list, list_input_files
+from utils.file_utils import enumerate_input_files, list_input_files
 from utils.report_generators import compose_textfile
+from workflows.run_util.io import get_cell_info_list
 
 def generate_report(
     figure_dicts: list[dict],

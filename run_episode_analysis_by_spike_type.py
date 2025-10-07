@@ -7,7 +7,7 @@ episodes (prior and joint probability).
 
 from workflows.episode_analysis_by_spiketype import EpisodeFiringBySpikeType
 from workflows.run_util.config import load_config
-from workflows.run_util.io import list_input_files
+from workflows.run_util.io import get_cell_info_list, collect_path_for_infos
 
 CONFIG_NAME = 'episode_analysis_by_spiketype'
 
@@ -17,11 +17,9 @@ if __name__ == "__main__":
     analysis = EpisodeFiringBySpikeType(config)
 
     statistics = []
-    input_files = list_input_files(config['data'], config['input'])
+    cell_infos = get_cell_info_list(config['input'])
+    input_files = collect_path_for_infos(cell_infos, config['data'])
     for input_file in input_files:
         print(f"Processing {input_file.name}...")
         statistics.append(analysis.run(input_file))
         print("done.")
-
-    if config['grouping']['do']:
-        analysis.run_grouped(statistics)
