@@ -145,3 +145,14 @@ def get_processed_path(info: CellInfo, config: dict) -> Path:
     extension = f'.{config.get("extension", "")}'
     file_name = f'{info.name}{suffix}{extension}'
     return Path(config['path']) / info.cell_type / file_name
+
+def setup_result_dir(output_dir: str) -> dict[str, Path]:
+    """
+    Prepare the output directories for saving results.
+    """
+    output_dirs = {}
+    output_path = Path(output_dir)
+    for i, dir_type in enumerate(['results', 'figures', 'stats']):
+        output_dirs[dir_type] = output_path / f"{i+1:02d}_{dir_type}"
+        output_dirs[dir_type].mkdir(parents=True, exist_ok=True)
+    return output_dirs

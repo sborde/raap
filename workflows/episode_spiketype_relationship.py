@@ -17,7 +17,8 @@ from analyses.model import (
 from workflows.run_util.grouping import get_grouping
 from workflows.run_util.io import (
     ResultPaths,
-    RecordingWithSpikes
+    RecordingWithSpikes,
+    setup_result_dir
 )
 from workflows.run_util.plotting import CategoricalDistribution, create_stacked_area_chart
 
@@ -42,17 +43,7 @@ class SpikeEpisodeProbabilityAnalysis:
             config['grouping']['path']
         )
 
-        self._output_dirs = {}
-        self._prepare_output_dirs()
-
-    def _prepare_output_dirs(self):
-        """
-        Prepare the output directories for saving results.
-        """
-        output_path = Path(self._output_path)
-        for i, dir_type in enumerate(['results', 'figures', 'stats']):
-            self._output_dirs[dir_type] = output_path / f"{i+1:02d}_{dir_type}"
-            self._output_dirs[dir_type].mkdir(parents=True, exist_ok=True)
+        self._output_dirs = setup_result_dir(config['output']['path'])
 
     def run(self, cell: CellWrapper[ResultPaths]) -> CellWrapper[DataFrame]:
         """
@@ -60,7 +51,7 @@ class SpikeEpisodeProbabilityAnalysis:
         """
         # Load data
         data = cell.data.load()
-        
+
         # Calculate spike type probabilities for marked episodes
         for episode_group in self._episode_groups:
             data = self._process_episode_group(data, episode_group)
@@ -100,7 +91,6 @@ class SpikeEpisodeProbabilityAnalysis:
                 group_dir / f"group_{group.name:02d}_spike_episode_stats.csv",
                 index=False
             )
-
 
     def _process_episode_group(
         self,
