@@ -33,9 +33,9 @@ if __name__ == "__main__":
     ]
 
     if aggregation_name == 'median':
-        aggregate = np.median
+        aggregate = np.nanmedian
     else:
-        aggregate = np.mean
+        aggregate = np.nanmean
 
     result_save_path = (
         Path(config['data'][dataset_name]['results']['path']) /
