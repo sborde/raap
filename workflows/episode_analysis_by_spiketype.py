@@ -31,7 +31,7 @@ class EpisodeFiringBySpikeType:
     """
 
     def __init__(self, config: dict):
-        self._output_dirs = setup_result_dir(config['output']['path'])
+        self._output_dir = Path(config['output']['path'])
         self._episodes = config['params']['episodes']
         self._spike_types = config['params']['spike_types']
         self._plot_params = config['plot']
@@ -57,7 +57,7 @@ class EpisodeFiringBySpikeType:
                 continue
         result = pd.concat(result_list, ignore_index=True)
 
-        result_dir = self._output_dirs['figures'] / cell.info.cell_type
+        result_dir = self._output_dir / cell.info.cell_type
         result_dir.mkdir(parents=True, exist_ok=True)
         result.to_excel(
             result_dir /
@@ -74,6 +74,7 @@ class EpisodeFiringBySpikeType:
         spikes = data.spikes.copy()
         timestamps = spikes['timestamp'].values
         starts, ends = data.get_episode_ends(name)
+        results =  []
         for start, end in zip(starts, ends):
             duration = end - start
             is_within = (timestamps >= start) & (timestamps <= end)
@@ -87,4 +88,5 @@ class EpisodeFiringBySpikeType:
                 result[spike_type] = np.sum(
                     is_within & (spikes['spike_type'] == spike_type)
                 ) / duration
-        return DataFrame(result, index=[0])
+            results.append(result)
+        return pd.DataFrame(results)
