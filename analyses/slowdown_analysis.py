@@ -56,7 +56,7 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
         ):
             file_path = CellWrapper(
                 cell_info,
-                cell_path.data.parent / f'{cell_name}_juxta{spike_type}.mat'
+                cell_path.data.parent / f'{cell_name}_{cell_path.cell_type}{spike_type}.mat'
             )
             cell_spikes = load_spikes(file_path, config['analysis']['extractor'])
             cell_features = describe_spikes(cell_spikes, config['analysis']['descriptor'])
