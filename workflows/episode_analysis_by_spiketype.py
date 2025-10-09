@@ -1,27 +1,19 @@
 
 
 from pathlib import Path
-from matplotlib.figure import Figure
 import numpy as np
 import pandas as pd
 
 from pandas import DataFrame
 
-import matplotlib.pyplot as plt
-
-from common.data_utils import CellInfo, CellWrapper
+from common.data_utils import CellWrapper
 from analyses.model import (
-    RecordingWithSpikes,
-    mark_events_around_trigger,
-    mark_events_in_interval
+    RecordingWithSpikes
 )
-from workflows.run_util.grouping import get_grouping
 from workflows.run_util.io import (
     ResultPaths,
-    RecordingWithSpikes,
-    setup_result_dir
+    RecordingWithSpikes
 )
-from workflows.run_util.plotting import CategoricalDistribution, create_stacked_area_chart
 
 
 class EpisodeFiringBySpikeType:
@@ -31,7 +23,7 @@ class EpisodeFiringBySpikeType:
     """
 
     def __init__(self, config: dict):
-        self._output_dir = Path(config['output']['path'])
+        self._output_dir = Path(config['output']['path']) / 'Individual'
         self._episodes = config['params']['episodes']
         self._spike_types = config['params']['spike_types']
         self._plot_params = config['plot']

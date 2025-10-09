@@ -2,11 +2,11 @@
 data:
   # Path to the raw data where files are grouped into subdirectories.
   raw_data:
-    path: c:\Datasets\raap\invivo\
+    path: e:\Data\BogiSejtek\20251007\data\invivo\
     extension: mat
   # Path to the results directory with the same structure as raw_data.
   results:
-    path: c:\tmp\Bozso2025\PutRAAP\Results\New\01_results\SpikeFeatures\
+    path: e:\tmp\RaApTemp\Preprocessed\SpikeFeatures
     extension: csv
     suffix:
 # Input selection: what to process from the data folders?
@@ -36,13 +36,13 @@ data:
 #   - file2.mat
 input:
   mode: table
-  table_path: c:\tmp\Bozso2025\PutRAAP\Results\New\data_invivo.xlsx
+  table_path: e:\tmp\RaApTemp\Preprocessed\data_invivo.xlsx
   select_rules:
   - selected: 1
 # Output directory where the figures and statistics directories will be created
 # It will follow the same structure as the input folders.
 output:
-  path: c:\tmp\Bozso2025\PutRAAP\Results\New\01_results\EpisodeFiring\Individual\
+  path: e:\tmp\RaApTemp\Preprocessed\EpisodeFiring\
 # Path to the grouping Excel sheet
 grouping:
   do: 0
