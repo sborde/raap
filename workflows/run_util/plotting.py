@@ -14,10 +14,10 @@ class CategoricalDistribution:
         self.category_name = category_name
 
 
-SpikeDistribution = tuple[str, CategoricalDistribution]
+NamedDistribution = tuple[str, CategoricalDistribution]
 
 def create_stacked_area_chart(
-    stats: list[SpikeDistribution],
+    stats: list[NamedDistribution],
     ax: Axes,
     params: dict
 ):

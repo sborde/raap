@@ -37,6 +37,13 @@ class ResultPaths:
             pd.read_csv(self.processed.as_posix(), index_col=None)
         )
 
+def collect_paths_from_table(
+    data_config: dict,
+    input_config: dict
+) -> list[CellWrapper[ResultPaths]]:
+    cell_infos = get_cell_info_list(input_config)
+    return collect_path_for_infos(cell_infos, data_config)
+
 def get_cell_info_list(input_config: dict) -> list[CellInfo]:
     """
     Get a list of CellInfo objects based on a table file.
