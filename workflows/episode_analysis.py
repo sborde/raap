@@ -289,19 +289,20 @@ class BetweenEpisodeComparisonWorkflow:
         stat_results = []
         if len(self._episodes) == 2:
             for spike_type in self._spike_types:
-                episodes = results['episode']
-                firing_rates = results[spike_type]
-                res = wilcoxon(
-                    firing_rates[episodes == self._episodes[0]],
-                    firing_rates[episodes == self._episodes[1]]
-                )
+                values  = [[], []]
+                for name in results['name'].unique():
+                    subset = results[results['name'] == name]
+                    for i, episode in enumerate(self._episodes):
+                        values[i].append(
+                            subset[subset['episode'] == episode][spike_type].values
+                        )
+                res = wilcoxon(values[0], values[1])
                 stat_results.append({
                     'spike_type': spike_type,
                     'episode_1': self._episodes[0],
                     'episode_2': self._episodes[1],
                     'difference': np.nanmedian(
-                        firing_rates[episodes == self._episodes[0]] -
-                        firing_rates[episodes == self._episodes[1]]
+                        np.array(values[0]) - np.array(values[1])
                     ),
                     'statistic': res.statistic,  # type: ignore
                     'p_value': res.pvalue  # type: ignore
