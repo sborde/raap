@@ -12,18 +12,20 @@ import seaborn as sns
 from tqdm import tqdm
 from pandas import DataFrame
 from scipy.stats import wilcoxon, kruskal
+from statsmodels.stats.multitest import multipletests
 
 from matplotlib.figure import Figure
 
-from common.data_utils import CellWrapper
+from common.data_utils import CellWrapper, GroupInfo, GroupWrapper
 from analyses.model import (
     RecordingWithSpikes
 )
-from param_classes.workflows.episode_analysis import EpisodeAnalysisWorkflowParams
+from param_classes.workflows.episode_analysis import EpisodeAnalysisWorkflowParams, GroupwiseComparisonParams
 from workflows.run_util.io import (
     ResultPaths,
     RecordingWithSpikes
 )
+from workflows.run_util.plotting import CategoricalDistribution, create_stacked_area_chart
 
 def run_analysis(
     cells: list[CellWrapper[ResultPaths]],
@@ -33,7 +35,7 @@ def run_analysis(
     analysis = EpisodeFiringBySpikeType(params)
     return [analysis.run(input_file) for input_file in tqdm(cells)]
 
-def create_groups(cells: list[CellWrapper]) -> dict[str, list[CellWrapper]]:
+def create_groups(cells: list[CellWrapper]) -> list[GroupWrapper[CellWrapper]]:
     """Create groups based on cell types."""
     groups = {}
     for cell in cells:
@@ -41,16 +43,33 @@ def create_groups(cells: list[CellWrapper]) -> dict[str, list[CellWrapper]]:
         if group_name not in groups:
             groups[group_name] = []
         groups[group_name].append(cell)
-    return groups
+    return [GroupWrapper(GroupInfo(name), members) for name, members in groups.items()]
 
 def run_comparison(
-    groups: dict[str, list[CellWrapper[DataFrame]]],
-    params: EpisodeAnalysisWorkflowParams
+    groups: list[GroupWrapper[CellWrapper[DataFrame]]],
+    params: GroupwiseComparisonParams
 ):
     """Run the group comparison of spike type vs. sleep episode relationship."""
-    comparison = EpisodeAnalysisGroupedWorkflow(params)
-    for name, members in tqdm(groups.items(), desc='Process groups'):
-        comparison.run(members, name)
+    comparison = BetweenEpisodeComparisonWorkflow(params)
+    for group in tqdm(groups, desc='Process groups'):
+        members = [
+            CellWrapper(member.info, pd.read_excel(member.data))
+            for member in group.members
+        ]
+        comparison.run(GroupWrapper(group.info, members))
+
+def plot_episode_durations(
+    groups: list[GroupWrapper[CellWrapper[DataFrame]]],
+    params: GroupwiseComparisonParams
+):
+    """Creates and saves episode duration plots for each group."""
+    plotting = EpisodeDurationPlotter(params)
+    for group in tqdm(groups, desc='Plot groups'):
+        members = [
+            CellWrapper(member.info, pd.read_excel(member.data))
+            for member in group.members
+        ]
+        plotting.run(GroupWrapper(group.info, members))
 
 class EpisodeFiringBySpikeType:
     """
@@ -69,7 +88,6 @@ class EpisodeFiringBySpikeType:
         else:
             self._output_dir = None
 
-        self._palette = params.palette
         self._params = params.analysis
 
     def run(self, cell: CellWrapper[ResultPaths]) -> CellWrapper[DataFrame]:
@@ -137,17 +155,84 @@ class EpisodeFiringBySpikeType:
             index=False
         )
 
+NamedCategorical = tuple[str, CategoricalDistribution]
 
-class EpisodeAnalysisGroupedWorkflow:
+class EpisodeDurationPlotter:
     """
-    Workflow for comparing spike type firing between episodes across groups.
+    A class for plotting the durations of episodes per cell.
     """
 
-    def __init__(self, params: EpisodeAnalysisWorkflowParams):
-        if params.output.path:
-            self._output_dirs = self._setup_output_dirs(params.output.path)
-        else:
-            self._output_dirs = None
+    def __init__(self, params: GroupwiseComparisonParams):
+        self._output_dir = (
+            Path(params.data.results.path) /
+            '02_figures' /
+            'Individual'
+        )
+        self._output_dir.mkdir(parents=True, exist_ok=True)
+        self._suffix = params.analysis.suffix
+        self._episodes = params.analysis.episodes
+        self._colors = [
+            params.palette['episode'][episode] for episode in self._episodes
+        ]
+        self._figure_params = params.output.figures
+
+    def run(self, group: GroupWrapper[CellWrapper[DataFrame]]) -> None:
+        """Run the episode duration plotting."""
+        plot_data = [
+            self._summarize_episodes(member) for member in group.members
+        ]
+        fig = self._create_plot(plot_data, group.name)
+        self._save_figure(fig, group.name)
+
+    def _create_plot(self, data: list[NamedCategorical], group_name: str) -> Figure:
+        """Create the episode duration plot."""
+        fig, ax = plt.subplots(figsize=(len(data) * 2, 4))
+        create_stacked_area_chart( data, ax, {'palette': self._colors})
+        ax.set_ylabel("Duration (s)")
+        ax.set_xlabel("Cells")
+        ax.set_title(group_name)
+        plt.tight_layout()
+        return fig
+
+    def _summarize_episodes(self, cell: CellWrapper[DataFrame]) -> NamedCategorical:
+        """Summarize the episodes in the given DataFrame."""
+        values = np.array([
+            self._aggregate_episode(cell.data, episode)
+            for episode in self._episodes
+        ])
+        return (
+            cell.name,
+            CategoricalDistribution(values, self._episodes, self._suffix)
+        )
+
+    def _aggregate_episode(self, frame: DataFrame, episode: str) -> float:
+        """Aggregate the results of a single episode."""
+        return np.sum(frame[frame['episode'] == episode]['duration'])
+
+    def _save_figure(self, fig: Figure, group_name: str) -> None:
+        """Save the figure of the group analysis."""
+        figure_name = f'{group_name}_cellwise_{self._suffix}_durations'
+        if self._figure_params.as_png:
+            fig.savefig(
+                self._output_dir / f'{figure_name}.png',
+                dpi=self._figure_params.dpi,
+                format='png'
+            )
+        if self._figure_params.as_svg:
+            fig.savefig(
+                self._output_dir / f'{figure_name}.svg',
+                format='svg'
+            )
+        plt.close(fig)
+
+class BetweenEpisodeComparisonWorkflow:
+    """
+    A workflow class that performs statistical comparison of firing rates of 
+    different spike types between sleep episodes.
+    """
+
+    def __init__(self, params: GroupwiseComparisonParams):
+        self._output_dirs = self._setup_output_dirs(params.data.results.path)
         self._params = params
         self._spike_types = params.analysis.spike_types
         self._episodes = params.analysis.episodes
@@ -158,45 +243,87 @@ class EpisodeAnalysisGroupedWorkflow:
         else:
             raise ValueError("Invalid aggregation method.")
 
-    def run(self, group: list[CellWrapper[DataFrame]], group_name: str):
+    def run(self, group: GroupWrapper[CellWrapper[DataFrame]]):
         """Runs the group analysis on a given group of cells."""
-        group_results = self._aggregate_cells(group)
-        fig = self._plot_results(group_results, group_name)
-        self._save_results(group_results, group_name)
-        self._save_figure(fig, group_name)
+        group_results = self._aggregate_cells(group.members)
+        fig = self._plot_results(group_results, group.name)
+        stat_results = self._perform_statistical_comparison(group_results)
+        self._save_statistics(stat_results, group.name)
+        self._save_results(group_results, group.name)
+        self._save_figure(fig, group.name)
 
-    def _aggregate_cells(self, group: list[CellWrapper[DataFrame]]):
+    def _aggregate_cells(self, group: list[CellWrapper[DataFrame]]) -> DataFrame:
         """Runs the group analysis on a given group of cells."""
-
+        # TODO Move this to a separate class
         cellwise_aggregates = []
         for cell in group:
-            info = cell.info
-            frame = cell.data
-            cell_dict = {'name': info.name, 'group': info.cell_type}
-            episodes_aggregates = []
-            for episode in self._episodes:
-                subset = frame[frame['episode'] == episode]
-                if subset.shape[0] == 0:
-                    episode_result = {
-                        spike_type: np.nan
-                        for spike_type in self._spike_types
-                    }
-                else:
-                    episode_result = {
-                        spike_type: self._aggregate(
-                            subset[spike_type] / subset['duration']
-                        )
-                        for spike_type in self._spike_types
-                    }
-                episodes_aggregates.append(
-                    cell_dict | {'episode': episode} | episode_result
-                )
+            heading = {
+                'name': cell.info.name, 'group': cell.info.cell_type
+            }
+            episodes_aggregates = [
+                heading | self._aggregate_episode(cell.data, episode)
+                for episode in self._episodes
+            ]
             cellwise_aggregates.append(pd.DataFrame(episodes_aggregates))
+
         group_results = pd.concat(cellwise_aggregates)
         group_results['episode'] = pd.Categorical(
             group_results['episode'], categories=self._episodes, ordered=True
         )
         return group_results
+
+    def _aggregate_episode(self, frame: DataFrame, episode: str) -> dict:
+        """Aggregate the results of a single episode."""
+        frame = frame[frame['episode'] == episode]
+        if frame.shape[0] == 0:
+            aggregates = {spike_type: np.nan for spike_type in self._spike_types}
+        else:
+            aggregates = {
+                spike_type: self._aggregate(frame[spike_type] / frame['duration'])
+                for spike_type in self._spike_types
+            }
+        return {'episode': episode, **aggregates}
+
+    def _perform_statistical_comparison(self, results: DataFrame) -> DataFrame:
+        """Perform statistical comparison between episodes."""
+        stat_results = []
+        if len(self._episodes) == 2:
+            for spike_type in self._spike_types:
+                episodes = results['episode']
+                firing_rates = results[spike_type]
+                res = wilcoxon(
+                    firing_rates[episodes == self._episodes[0]],
+                    firing_rates[episodes == self._episodes[1]]
+                )
+                stat_results.append({
+                    'spike_type': spike_type,
+                    'episode_1': self._episodes[0],
+                    'episode_2': self._episodes[1],
+                    'difference': np.nanmedian(
+                        firing_rates[episodes == self._episodes[0]] -
+                        firing_rates[episodes == self._episodes[1]]
+                    ),
+                    'statistic': res.statistic,  # type: ignore
+                    'p_value': res.pvalue  # type: ignore
+                })
+        else:
+            for spike_type in self._spike_types:
+                _, kruskal_p = kruskal(
+                    *[
+                        results[results['episode'] == ep][spike_type].dropna()
+                        for ep in self._episodes
+                    ]
+                )
+                stat_results.append({
+                    'spike_type': spike_type,
+                    'kruskal_p': kruskal_p,
+                    **{
+                        ep: np.nanmedian(
+                            results[results['episode'] == ep][spike_type]
+                        ) for ep in self._episodes
+                    }
+                })
+        return DataFrame(stat_results)
 
     def _plot_results(
         self, group_results: DataFrame, group_name: str
@@ -231,28 +358,6 @@ class EpisodeAnalysisGroupedWorkflow:
             ax.set_title(spike_type)
             ax.set_ylabel("Mean firing rate (Hz)")
             ax.set_xlabel("Episode")
-            # if len(self._episodes) == 2:
-            #     res = wilcoxon(
-            #         group_results[group_results['episode'] == self._episodes[0]][spike_type],
-            #         group_results[group_results['episode'] == self._episodes[1]][spike_type]
-            #     )
-            #     stat_result = (
-            #         f"{self._episodes[0]} vs. {self._episodes[1]}, " +
-            #         f"p={res.pvalue:.3f}"  # type: ignore
-            #     )
-            # else:
-            #     _, kruskal_p = kruskal(
-            #         *[
-            #             group_results[group_results['episode'] == ep][spike_type].dropna()
-            #             for ep in self._episodes
-            #         ]
-            #     )
-            #     stat_result = f"Kruskal-Wallis p={kruskal_p:.3f}"
-
-            # res = wilcoxon(
-            #     group_results[group_results['episode'] == 'sw'][spike_type],
-            #     group_results[group_results['episode'] == 'theta'][spike_type]
-            # )
 
         plt.suptitle(group_name)
         plt.tight_layout()
@@ -296,6 +401,16 @@ class EpisodeAnalysisGroupedWorkflow:
         results.to_excel(
             self._output_dirs['results'] /
             f'{group_name}_cellwise_aggregate.xlsx', 
+            index=False
+        )
+
+    def _save_statistics(self, stats: DataFrame, group_name: str) -> None:
+        """Save the statistical comparison results of a group."""
+        if not self._output_dirs:
+            return
+        stats.to_excel(
+            self._output_dirs['stats'] /
+            f'{group_name}_statistical_comparison.xlsx', 
             index=False
         )
 

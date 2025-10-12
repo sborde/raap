@@ -1,5 +1,6 @@
 """This module contains the parameter classes for episode analysis."""
 
+from typing import Any, Callable, Literal
 from pydantic import BaseModel
 
 
@@ -13,6 +14,48 @@ class FigureSaveParams(BaseModel):
     def save(self) -> bool:
         """Determine if any figure saving is enabled."""
         return self.as_png or self.as_svg
+
+
+class CellwiseResultsPathParams(BaseModel):
+    """Parameter class for results path settings."""
+    path: str = ''
+    extension: str = ''
+    suffix: str = ''
+
+
+class RawDataPathParams(BaseModel):
+    """Parameter class for data path settings."""
+    path: str = ''
+    extension: str = 'mat'
+    suffix: str = ''
+
+
+class SpikeFeaturesPathParam(BaseModel):
+    """Parameter class for the path of spike features"""
+    path: str = ''
+    extension: str = 'csv'
+    suffix: str = ''
+
+    def model_dump(self) -> dict:
+        return {
+            'results': super().model_dump()
+        }
+
+class InputDataParams(BaseModel):
+    """Parameter class for input data settings."""
+    raw_data: RawDataPathParams = RawDataPathParams()
+    spike_features: SpikeFeaturesPathParam = SpikeFeaturesPathParam()
+
+    def model_dump(self) -> dict:
+        return {
+            'raw_data': self.raw_data.model_dump()
+        } | self.spike_features.model_dump()
+
+
+class GroupingInputParams(BaseModel):
+    """Parameter class for grouping input settings."""
+    results: CellwiseResultsPathParams = CellwiseResultsPathParams()
+
 
 class OutputParams(BaseModel):
     """Parameter class for output settings."""
@@ -33,8 +76,16 @@ class GroupingParams(BaseModel):
 
 class EpisodeAnalysisWorkflowParams(BaseModel):
     """Parameter class for the episode analysis workflow."""
+    data: InputDataParams = InputDataParams()
+    input: dict = {}
+    output: OutputParams = OutputParams()
+    analysis: EpisodeAnalysisParams = EpisodeAnalysisParams()
+
+
+class GroupwiseComparisonParams(BaseModel):
+    """Parameter class for groupwise comparison settings."""
     palette: dict = {}
-    data: dict = {}
+    data: GroupingInputParams = GroupingInputParams()
     input: dict = {}
     output: OutputParams = OutputParams()
     analysis: EpisodeAnalysisParams = EpisodeAnalysisParams()

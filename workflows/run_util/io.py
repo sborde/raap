@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from param_classes.workflows.episode_analysis import GroupingInputParams, InputDataParams, CellwiseResultsPathParams
 from signalizer.model.experiment.recordings import MatRecording
 
 from analyses.model import RecordingWithSpikes
@@ -38,11 +39,26 @@ class ResultPaths:
         )
 
 def collect_paths_from_table(
-    data_config: dict,
+    data_config: InputDataParams,
     input_config: dict
 ) -> list[CellWrapper[ResultPaths]]:
+    """Returns the result-raw data path pairs for the cells specified in the table."""
     cell_infos = get_cell_info_list(input_config)
-    return collect_path_for_infos(cell_infos, data_config)
+    return collect_path_for_infos(cell_infos, data_config.model_dump())
+
+def collect_results_from_table(
+    results_config: CellwiseResultsPathParams,
+    input_config: dict
+) -> list[CellWrapper[Path]]:
+    """Returns the result tables' path for the cells specified in the table."""
+    cell_infos = get_cell_info_list(input_config)
+    result_params = results_config.model_dump()
+    result_params['path'] = str(
+        Path(result_params['path']) / '01_results' / 'Individual'
+    )
+    return collect_processed_paths_for_infos(
+        cell_infos, result_params
+    )
 
 def get_cell_info_list(input_config: dict) -> list[CellInfo]:
     """
@@ -125,6 +141,27 @@ def collect_path_for_infos(
                 ResultPaths(raw_path, results_path)
             )
         )
+    return outputs
+
+def collect_processed_paths_for_infos(
+    infos: list[CellInfo], result_paths: dict
+) -> list[CellWrapper[Path]]:
+    """
+    Collects processed paths for the given cell infos based on the data configuration.
+    Args:
+        infos (list[CellInfo]): List of CellInfo objects.
+        paths (dict): Data configuration containing paths.
+    Returns:
+        list[CellWrapper[ResultPaths]]: List of CellWrapper objects with paths.
+    """
+    outputs = []
+    for info in infos:
+        results_path = get_processed_path(info, result_paths)
+        if not results_path.exists():
+            raise FileNotFoundError(
+                f'Processed file for {info.name} does not exist.'
+            )
+        outputs.append(CellWrapper(info, results_path))
     return outputs
 
 def create_file_lister(input_config: dict) -> CellEnumerator:
