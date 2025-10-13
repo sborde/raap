@@ -24,9 +24,7 @@ class TimeStampSequence(HDFExportable):
 
     def __len__(self) -> int: return len(self._timestamps)
 
-    def __getitem__(self, index) -> TimeStamp | Self:
-        if isinstance(index, slice):
-            return TimeStampSequence(self._timestamps[index])
+    def __getitem__(self, index) -> TimeStamp:
         if isinstance(index, int):
             if index < 0 or index >= len(self):
                 raise ValueError('Index is out of bounds.')
@@ -88,9 +86,7 @@ class TimeIntervalSequence(HDFExportable):
 
     def __len__(self) -> int: return len(self._intervals)
 
-    def __getitem__(self, index) -> TimeInterval | Self:
-        if isinstance(index, slice):
-            return TimeIntervalSequence(self._intervals[index], self._unit)
+    def __getitem__(self, index) -> TimeInterval:
         if isinstance(index, int):
             if index < 0 or index >= len(self):
                 raise ValueError('Index is out of bounds.')

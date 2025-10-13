@@ -33,9 +33,7 @@ class EventVector(TimeReferencedVector):
 
     def __len__(self) -> int: return len(self._timestamps)
 
-    def __getitem__(self, index) -> Event | Self:
-        if isinstance(index, slice):
-            return EventVector(self._timestamps[index], self._name, self._attributes)
+    def __getitem__(self, index) -> Event:
         if isinstance(index, int):
             if index < 0 or index >= len(self):
                 raise ValueError('Index is out of bounds.')
@@ -60,6 +58,11 @@ class EventVector(TimeReferencedVector):
 
     @property
     def attributes(self) -> dict: return self._attributes
+
+    @property
+    def timestamps(self) -> TimeStampSequence:
+        """Get the timestamps of the events."""
+        return self._timestamps
 
     def converted(self, new_unit: TimeUnit) -> 'EventVector':
         """Convert the timestamps to a new unit."""
@@ -103,9 +106,7 @@ class EpisodeSequence(TimeReferencedVector):
 
     def __len__(self) -> int: return len(self._intervals)
 
-    def __getitem__(self, index) -> Episode | Self:
-        if isinstance(index, slice):
-            return EpisodeSequence(self._intervals[index], self._name)
+    def __getitem__(self, index) -> Episode:
         if isinstance(index, int):
             if index < 0 or index >= len(self):
                 raise ValueError('Index is out of bounds.')
@@ -130,6 +131,11 @@ class EpisodeSequence(TimeReferencedVector):
 
     @property
     def attributes(self) -> dict: return self._attributes
+
+    @property
+    def intervals(self) -> TimeIntervalSequence:
+        """Get the time intervals of the episodes."""
+        return self._intervals
 
     def converted(self, new_unit: TimeUnit) -> 'EpisodeSequence':
         """Convert the interval to a new unit."""

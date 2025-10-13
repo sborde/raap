@@ -27,7 +27,7 @@ from workflows.run_util.io import (
 )
 from workflows.run_util.plotting import CategoricalDistribution, create_stacked_area_chart
 
-def run_analysis(
+def describe_episodes(
     cells: list[CellWrapper[ResultPaths]],
     params: EpisodeAnalysisWorkflowParams
 ) -> list[CellWrapper[DataFrame]]:
@@ -102,6 +102,7 @@ class EpisodeFiringBySpikeType:
             self._output_dir = None
 
         self._params = params.analysis
+        self._interval_type = self._params.interval_type
 
     def run(self, cell: CellWrapper[ResultPaths]) -> CellWrapper[DataFrame]:
         """
@@ -454,6 +455,7 @@ class BetweenSpikeTypeInEpisodeComparisonWorkflow:
         self._params = params
         self._spike_types = params.analysis.spike_types
         self._episodes = params.analysis.episodes
+        self._condition = params.grouping.condition
         if params.grouping.aggregation == 'mean':
             self._aggregate = np.nanmean
         elif params.grouping.aggregation == 'median':
@@ -467,9 +469,10 @@ class BetweenSpikeTypeInEpisodeComparisonWorkflow:
         self._save_results(group_results, group.name)
 
         fig = self._plot_results(group_results, group.name)
-        # stat_results = self._perform_statistical_comparison(group_results)
-        # self._save_statistics(stat_results, group.name)
         self._save_figure(fig, group.name)
+
+        stat_results = self._perform_statistical_comparison(group_results)
+        self._save_statistics(stat_results, group.name)
 
     def _aggregate_cells(self, group: list[CellWrapper[DataFrame]]) -> DataFrame:
         """Runs the group analysis on a given group of cells."""
@@ -499,11 +502,11 @@ class BetweenSpikeTypeInEpisodeComparisonWorkflow:
                 spike_type: np.nan for spike_type in self._spike_types
             } | {'ratio': np.nan}
         else:
-            has_both = (
-                (frame[self._spike_types[0]] > 0) &
-                (frame[self._spike_types[1]] > 0)
-            )
-            frame = frame[has_both]
+            selected = np.ones(frame.shape[0]).astype(bool)
+            for spike_type in self._condition:
+                selected &= (frame[spike_type] > 0)
+
+            frame = frame[selected]
             if frame.shape[0] == 0:
                 aggregates = {
                     spike_type: np.nan for spike_type in self._spike_types
@@ -512,71 +515,54 @@ class BetweenSpikeTypeInEpisodeComparisonWorkflow:
                 aggregates = {
                     spike_type: self._aggregate(frame[spike_type] / frame['duration'])
                     for spike_type in self._spike_types
-                } | {'ratio': np.mean(has_both)}
+                } | {'ratio': np.mean(selected)}
         return {'episode': episode, **aggregates}
 
     def _perform_statistical_comparison(self, results: DataFrame) -> DataFrame:
         """Perform statistical comparison between episodes."""
         stat_results = []
-        if len(self._episodes) == 2:
-            for spike_type in self._spike_types:
-                values  = [[], []]
-                for name in results['name'].unique():
-                    subset = results[results['name'] == name]
-                    for i, episode in enumerate(self._episodes):
-                        values[i].append(
-                            subset[subset['episode'] == episode][spike_type].values
-                        )
-                res = wilcoxon(values[0], values[1])
-                stat_results.append({
-                    'spike_type': spike_type,
-                    'episode_1': self._episodes[0],
-                    'episode_2': self._episodes[1],
-                    'difference': np.nanmedian(
-                        np.array(values[0]) - np.array(values[1])
-                    ),
-                    'statistic': res.statistic,  # type: ignore
-                    'p_value': res.pvalue  # type: ignore
-                })
-        else:
-            for spike_type in self._spike_types:
-                _, kruskal_p = kruskal(
-                    *[
-                        results[results['episode'] == ep][spike_type].dropna()
-                        for ep in self._episodes
-                    ]
-                )
-                stat_results.append({
-                    'spike_type': spike_type,
-                    'kruskal_p': kruskal_p,
-                    **{
-                        ep: np.nanmedian(
-                            results[results['episode'] == ep][spike_type]
-                        ) for ep in self._episodes
-                    }
-                })
+        print(results)
+        for i, episode in enumerate(self._episodes):
+            subset = results[results['episode'] == episode]
+            values = [subset[spike_type].values for spike_type in self._spike_types]
+            res = wilcoxon(values[0], values[1])
+
+            stat_results.append({
+                'episode': episode,
+                'spike_type_1': self._spike_types[0],
+                'spike_type_2': self._spike_types[1],
+                'difference': np.nanmedian(
+                    np.array(values[0]) - np.array(values[1])
+                ),
+                'statistic': res.statistic,  # type: ignore
+                'p_value': res.pvalue  # type: ignore
+            })
+
         return DataFrame(stat_results)
 
     def _plot_results(
-        self, group_results: DataFrame, group_name: str
+        self, results: DataFrame, group_name: str
     ) -> Figure:
         """Plot the results of the group analysis."""
         n_episodes = len(self._episodes)
         fig, axes = plt.subplots(1, n_episodes, figsize=(8, 6), sharey=True)
         for ax, episode in zip(axes, self._episodes):
-            subset = group_results[group_results['episode'] == episode]
+            subset = results.loc[
+                results['episode'] == episode,
+                ['name', 'ratio'] + self._spike_types
+            ]
             long_df = pd.melt(
                 subset,
-                id_vars=['name', 'group', 'episode', 'ratio'],
+                id_vars=['name', 'ratio'],
                 value_vars=self._spike_types,
                 var_name='spike_type',
                 value_name='frequency'
             )
             long_df['spike_type'] = pd.Categorical(
-                long_df['spike_type'], categories=self._spike_types, ordered=True
+                long_df['spike_type'],
+                categories=self._spike_types,
+                ordered=True
             )
-            print(long_df['spike_type'])
-            print(long_df['frequency'])
             episode_color = self._get_episode_color(episode, group_name)
             sns.boxplot(
                 x='spike_type',
@@ -588,10 +574,10 @@ class BetweenSpikeTypeInEpisodeComparisonWorkflow:
                 ax=ax
             )
             for name in long_df['name'].unique():
-                subset = long_df[long_df['name'] == name]
+                cell_subset = long_df[long_df['name'] == name]
                 ax.plot(
-                    subset['spike_type'],
-                    subset['frequency'],
+                    cell_subset['spike_type'],
+                    cell_subset['frequency'],
                     color=episode_color,
                     markersize=10,
                     marker='o',
@@ -664,6 +650,12 @@ class BetweenSpikeTypeInEpisodeComparisonWorkflow:
             f'{group_name}_statistical_comparison.xlsx', 
             index=False
         )
+
+    def _save_table(self, table: DataFrame, path: str) -> None:
+        """Save the statistical comparison results of a group."""
+        if not self._output_dirs:
+            return
+        table.to_excel(path, index=False)
 
     def _setup_output_dirs(self, output_dir: str) -> dict[str, Path]:
         """

@@ -71,6 +71,9 @@ class Event(TimeReferenced):
     @property
     def attributes(self) -> dict: return self._attributes.attributes
 
+    @property
+    def time(self) -> float: return self._timestamp.time
+
     def save(self, group: h5py.Group):
         self._attributes.save(group)
         self._timestamp.save(group.create_group('timestamp'))
@@ -102,6 +105,12 @@ class Episode(TimeReferenced):
 
     @property
     def attributes(self) -> dict: return self._attributes.attributes
+
+    @property
+    def start(self) -> float: return self._interval.start
+
+    @property
+    def end(self) -> float: return self._interval.end
 
     def save(self, group: h5py.Group):
         self._attributes.save(group)

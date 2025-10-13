@@ -42,9 +42,7 @@ class IntervalSequence(HDFExportable):
     def __len__(self) -> int:
         return len(self._starts)
 
-    def __getitem__(self, index) -> Interval | Self:
-        if isinstance(index, slice):
-            return IntervalSequence(self._starts[index], self._ends[index])
+    def __getitem__(self, index) -> Interval:
         if isinstance(index, int):
             if index < 0 or index >= len(self):
                 raise ValueError('Index is out of bounds.')
@@ -101,9 +99,7 @@ class ValueSequence(HDFExportable, Iterable[float]):
 
     def __len__(self) -> int: return self._values.size
 
-    def __getitem__(self, index) -> float | Self:
-        if isinstance(index, slice):
-            return ValueSequence(self._values[index])
+    def __getitem__(self, index) -> float:
         if isinstance(index, int):
             if not (0 <= index < len(self)):
                 raise IndexError('Index is out of bounds.')

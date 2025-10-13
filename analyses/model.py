@@ -33,16 +33,36 @@ class RecordingWithSpikes:
         Get marker times of the event given by its name.
         """
         events = self.recording.get_event(name)
-        markers = np.array([event.timestamp.time for event in events])
+        markers = np.array([event.time for event in events])
         return markers
 
     def get_episode_ends(self, name: str) -> IntervalEnds:
         """Returns the start and end times of all episodes with the given name."""
         episodes = self.recording.get_episode(name)
-        return (
-            np.array([episode.interval.start for episode in episodes]),
-            np.array([episode.interval.end for episode in episodes]),
-        )
+        starts, ends = [], []
+        for episode in episodes:
+            starts.append(episode.start)
+            ends.append(episode.end)
+        return (np.array(starts), np.array(ends))
+
+    def get_oscillation_cycles(
+        self,
+        oscillation_name: str,
+        marker_name: str
+    ) -> IntervalEnds:
+        """
+        Returns the start and end times of all cycles of the specified oscillation
+        within the episodes of the given name.
+        """
+        episodes = self.recording.get_episode(oscillation_name)
+        markers = self.get_markers(marker_name)
+        starts, ends  = [], []
+        for episode in episodes:
+            is_within = (markers >= episode.start) & (markers <= episode.end)
+            markers_within = markers[is_within]
+            starts.extend(markers_within[:-1])
+            ends.extend(markers_within[1:])
+        return (np.array(starts), np.array(ends))
 
 def mark_events_around_trigger(
     events: DataFrame,
