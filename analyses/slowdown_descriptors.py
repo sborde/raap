@@ -103,6 +103,7 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | int:
         return 1
 
     noise_properties = {}
+    raw_v = spike.values
     v = spike.values
     if 'smooth' in params and params['smooth']:
         v = savgol_filter(v, **params['smooth'])
@@ -210,6 +211,7 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | int:
             'relative_rebound_time': 0,
             't': spike.times,
             'v': v,
+            'raw_v': raw_v,
             'dv': dv,
             'start_i': start_i,
             'search_start_i': search_start_i,
@@ -269,6 +271,7 @@ def calculate_rising_features(spike: SpikeShape, params: dict) -> dict | int:
             'relative_rebound_time': rebound_time / rising_duration,
             't': spike.times,
             'v': v,
+            'raw_v': raw_v,
             'dv': dv,
             'start_i': start_i,
             'search_start_i': search_start_i,
@@ -423,7 +426,8 @@ def calculate_sparse_2d_histogram(x, labels, bin_size) -> pd.DataFrame:
 def create_debug_images(
     results: list[dict],
     output_dir: Path,
-    output_dpi: int = 72
+    output_dpi: int = 72,
+    make_svg: bool = False
 ) -> None:
     """
     Plots each individual spike with the calculated features and some
@@ -444,12 +448,12 @@ def create_debug_images(
     for i, feature in enumerate(results):
         row_i = i % n_spike_on_figure
 
-        feature = feature
-
         t = feature['t']
         dvt = t[:-1]
         v = feature['v']
         dv = feature['dv']
+        raw_v = feature['raw_v']
+        rawdv = np.diff(raw_v)
 
         start_i = feature['start_i']
         search_start_i = feature['search_start_i']
@@ -460,6 +464,7 @@ def create_debug_images(
         valley_i = feature['valley_i']
 
         ax1 = axes[row_i, 0]
+        ax1.plot(t, raw_v, '-', color='lightgray')
         ax1.plot(t, v, '-', color='blue')
         ax1.plot(t[start_i], v[start_i], 'o', color='red')
         ax1.plot(
@@ -472,6 +477,8 @@ def create_debug_images(
         ax1.set_xticks(np.linspace(t[0], t[-1], 4))
 
         ax2 = axes[row_i, 1]
+
+        ax2.plot(dvt, rawdv, '-', color='lightgray')
         ax2.plot(dvt, dv, '-', color='green')
         ax2.plot(
             dvt[search_start_i:search_end_i+1],
@@ -516,6 +523,7 @@ def create_debug_images(
         )
 
         ax3 = axes[row_i, 2]
+        ax3.plot(raw_v[:-1], rawdv, '-', color='lightgray')
         ax3.plot(v[:-1], dv, '-', color='blue')
         ax3.plot(
             v[search_start_i:search_end_i+1],
@@ -536,10 +544,18 @@ def create_debug_images(
 
         if (i+1) % n_spike_on_figure == 0 or i == len(results) - 1:
             plt.tight_layout(pad=1.0)
+            figure_name = f'spike_shape_{i // n_spike_on_figure + 1}'
             plt.savefig(
-                output_dir / f'spike_shape_{i // n_spike_on_figure + 1}.png',
+                output_dir / f'{figure_name}.png',
+                format='png',
                 dpi=output_dpi
             )
+            if make_svg:
+                with plt.rc_context({'svg.fonttype': 'none'}):
+                    plt.savefig(
+                        output_dir / f'{figure_name}.svg',
+                        format='svg'
+                    )
             plt.close(fig)
             del fig
             if i < len(results) - 1:
@@ -572,7 +588,7 @@ def describe_spikes(entry: PathEntry, config: dict) -> pd.DataFrame:
         plot_features = features
         if config['descriptor']['single_spike_images']['skip_zero']:
             plot_features = [
-                f for f in features 
+                f for f in features
                 if (
                     f['relative_dv_drop'] > 0 or
                     f['relative_rebound_time'] > 0
@@ -581,7 +597,8 @@ def describe_spikes(entry: PathEntry, config: dict) -> pd.DataFrame:
         create_debug_images(
             plot_features,
             debug_dir,
-            output_dpi=config['descriptor']['single_spike_images']['dpi']
+            output_dpi=config['descriptor']['single_spike_images']['dpi'],
+            make_svg=config['descriptor']['single_spike_images'].get('make_svg', False)
         )
         print('Individual images created.')
 
