@@ -59,6 +59,18 @@ def analyze_cell(cell_path: CellWrapper[Path], config: dict) -> dict:
                 cell_path.data.parent / f'{cell_name}_{cell_path.cell_type}{spike_type}.mat'
             )
             cell_spikes = load_spikes(file_path, config['analysis']['extractor'])
+
+            if cell_path.cell_type == 'whole':
+                cell_spikes = CellWrapper(
+                    cell_info,
+                    SpikeShapes(
+                        cell_spikes.data.times,
+                        cell_spikes.data.segments.values * 1000,
+                        cell_spikes.data.timestamps,
+                        cell_spikes.data.dt
+                    )
+                )
+
             cell_features = describe_spikes(cell_spikes, config['analysis']['descriptor'])
             cell_feature_frames.append(
                 cell_features.data.assign(spike_type=type_name)
