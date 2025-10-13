@@ -232,10 +232,11 @@ class EpisodeDurationPlotter:
                 format='png'
             )
         if self._figure_params.as_svg:
-            fig.savefig(
-                self._output_dir / f'{figure_name}.svg',
-                format='svg'
-            )
+            with plt.rc_context({'svg.fonttype': 'none'}):
+                fig.savefig(
+                    self._output_dir / f'{figure_name}.svg',
+                    format='svg'
+                )
         plt.close(fig)
 
 
@@ -390,10 +391,11 @@ class BetweenEpisodeComparisonWorkflow:
                     format='png'
                 )
             if self._params.output.figures.as_svg:
-                fig.savefig(
-                    figure_dir / f'{figure_name}.svg',
-                    format='svg'
-                )
+                with plt.rc_context({'svg.fonttype': 'none'}):
+                    fig.savefig(
+                        figure_dir / f'{figure_name}.svg',
+                        format='svg'
+                    )
             plt.close(fig)
 
     def _get_spike_color(self, spike_type: str, cell_type: str) -> str:
@@ -623,10 +625,11 @@ class BetweenSpikeTypeInEpisodeComparisonWorkflow:
                     format='png'
                 )
             if self._params.output.figures.as_svg:
-                fig.savefig(
-                    figure_dir / f'{figure_name}.svg',
-                    format='svg'
-                )
+                with plt.rc_context({'svg.fonttype': 'none'}):
+                    fig.savefig(
+                        figure_dir / f'{figure_name}.svg',
+                        format='svg'
+                    )
             plt.close(fig)
 
     def _get_episode_color(self, episode: str, cell_type: str) -> str:
