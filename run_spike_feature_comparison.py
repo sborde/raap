@@ -48,15 +48,19 @@ if __name__ == "__main__":
     )
     figure_save_path.mkdir(parents=True, exist_ok=True)
 
-    for feature in params['plot_feature_list']:
+    for feature in params['plot_features']:
         aggregated_results = []
         for name, frame in frames:
             frame_spikes = []
             for spike_type in spike_types:
                 subset = frame[frame['spike_type'] == spike_type]
+
+                if len(subset) == 0:
+                    continue
+
                 frame_spikes.append({
                     'name': name,
-                    'value': aggregate(subset[feature]),
+                    'value': aggregate(subset[feature['name']]),
                     'spike_type': spike_type
                 })
             cell_result = pd.DataFrame(frame_spikes)
@@ -69,7 +73,7 @@ if __name__ == "__main__":
                 print(f"Skipping {name} due to missing spike types")
         result_df = pd.concat(aggregated_results)
         result_df.to_excel(
-            result_save_path / f'{feature}_comparison.xlsx', index=False
+            result_save_path / f'{feature["name"]}_comparison.xlsx', index=False
         )
         result_df['spike_type'] = pd.Categorical(
             result_df['spike_type'], categories=spike_types, ordered=True
@@ -99,18 +103,19 @@ if __name__ == "__main__":
                 label=name,
                 linewidth=2,
             )
-
-        plt.title(f'Comparison of {feature}, p={res.pvalue:.3f}') # type: ignore
-        plt.ylabel(f'{aggregation_name.capitalize()} {feature}')
-        figure_name = f'{aggregation_name}_{feature}_comparison'
+        plt.ylim(feature['limit'])
+        plt.title(f'Comparison of {feature["name"]}, p={res.pvalue:.3f}') # type: ignore
+        plt.ylabel(f'{aggregation_name.capitalize()} {feature["name"]}')
+        figure_name = f'{aggregation_name}_{feature["name"]}_comparison'
         plt.savefig(
             figure_save_path / f'{figure_name}.png',
             dpi=config['output']['dpi'],
             format='png'
         )
         if config['output']['make_svg']:
-            plt.savefig(
-                figure_save_path / f'{figure_name}.svg',
-                format='svg'
-            )
+            with plt.rc_context({'svg.fonttype': 'none'}):
+                plt.savefig(
+                    figure_save_path / f'{figure_name}.svg',
+                    format='svg'
+                )
         plt.close(fig)

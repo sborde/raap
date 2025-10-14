@@ -32,14 +32,21 @@ output:
   dpi: 100
 params:
   aggregation: mean
-  plot_feature_list:
-    - amplitude
-    - risetime
-    - base_v
-    - start_v
-    - rising_slope
-    - baseline_slope
-    - half_width
+  plot_features:
+    - name: amplitude
+      limit: [0, 5]
+    - name: risetime
+      limit: [0, 5]
+    - name: base_v
+      limit: [-80, -40]
+    - name: start_v
+      limit: [-80, -40]
+    - name: rising_slope
+      limit: [0, 0.5]
+    - name: baseline_slope
+      limit: [-0.5, 0.5]
+    - name: half_width
+      limit: [0, 5]
   spike_types:
     - AIS-AP
     - UNDEFINED
