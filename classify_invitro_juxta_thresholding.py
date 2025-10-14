@@ -10,8 +10,11 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 from sklearn.metrics import precision_score, recall_score, f1_score
 from sklearn.model_selection import StratifiedKFold
+
+from matplotlib.axes import Axes
 from matplotlib.colors import LinearSegmentedColormap
 
 from analyses.slowdown_descriptors import calculate_sparse_2d_histogram
@@ -31,7 +34,7 @@ def generate_meshgrid_for_dataset(x, margin=0.1, n_points=200):
     )
 
 def plot_classified_space(
-    axis: plt.Axes,
+    axis: Axes,
     x: np.ndarray,
     labels: np.ndarray,
     predictions: Prediction2D,
@@ -56,15 +59,6 @@ def plot_classified_space(
         antialiased=True,
         alpha=0.5
     )
-    # sns.scatterplot(
-    #     x=data[:, 0],
-    #     y=data[:, 1],
-    #     hue=labels,
-    #     edgecolor=None,
-    #     palette=class_colors,
-    #     ax=axis
-    # )
-
     binned_data = calculate_sparse_2d_histogram(x, labels, bin_size=0.005)
     sns.scatterplot(
         data=binned_data,
@@ -80,13 +74,13 @@ def plot_classified_space(
     axis.set_xlabel('Relative dV Drop')
     axis.set_ylabel('Relative Rebound Time')
 
-    handles, labels = axis.get_legend_handles_labels()
+    legend_handles, legend_labels = axis.get_legend_handles_labels()
 
-    print(labels)
+    print(legend_labels)
 
     components_to_keep = [
         (handle, names[int(label)]) for handle, label
-        in zip(handles, labels)
+        in zip(legend_handles, legend_labels)
         if label in ids
     ]
     style_handles = [h for h, _ in components_to_keep]
@@ -102,8 +96,6 @@ def plot_classified_space(
     )
 
     axis.set_aspect('equal')
-
-
 
 def calculate_metrics(y_true, y_pred):
     """Calculate precision, recall, and F1 score for the predictions."""
@@ -206,8 +198,6 @@ DIR_PATH = (
     'w11_p2'
 )
 
-INPUT_PATH = DIR_PATH / 'invitro_juxta_dataset.csv'
-
 CLASSES = [
     {
         'name': 'AISAP',
@@ -227,7 +217,15 @@ TARGET_FEATURE = 'spike_type'
 
 splitter = StratifiedKFold(n_splits=N_FOLD, shuffle=True, random_state=42)
 
-data = pd.read_csv(INPUT_PATH).sort_values(by=['spike_type'], ascending=False)
+data_frames = []
+for file in DIR_PATH.glob('*.csv'):
+    print(f'Load {file.name}')
+    df = pd.read_csv(file)
+    df['cell_name'] = file.stem
+    data_frames.append(df)
+
+data = pd.concat(data_frames, ignore_index=True)
+data = data.sort_values(by=['spike_type'], ascending=False)
 
 X = data[PREDICTOR_FEATURES].values
 y = data[TARGET_FEATURE].map(CLASS_MAPPER).values.astype(int)
@@ -346,9 +344,21 @@ plt.title(
     f'Recall: {best_threshold["recall"]:.2f}, ' +
     f'F1 Score: {best_threshold["f1_score"]:.2f}'
 )
+
+FIGURE_NAME = 'classification_thresholding_full_results'
+
 plt.savefig(
     DIR_PATH /
-    'classification_thresholding_full_results.png',
+    f'{FIGURE_NAME}.png',
+    format='png',
     dpi=300
 )
+with plt.rc_context({'svg.fonttype': 'none'}):
+    plt.savefig(
+        DIR_PATH /
+        f'{FIGURE_NAME}.svg',
+        format='svg',
+        dpi=300
+    )
+
 plt.close(fig)
