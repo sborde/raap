@@ -8,7 +8,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from param_classes.workflows.episode_analysis import GroupingInputParams, InputDataParams, CellwiseResultsPathParams
+from param_classes.workflows.episode_analysis import GroupingInputParams, InputDataParams
+from param_classes.workflows.input_output import CellwiseResultsPathParams
 from signalizer.model.experiment.recordings import MatRecording
 
 from analyses.model import RecordingWithSpikes
