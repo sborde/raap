@@ -236,6 +236,12 @@ def load_spikes(
         CellWrapper[SpikeShapes]: A wrapper containing the loaded spike shapes.
     """
     spikes = load_spike_shapes(cell_path.data, config)
+    spikes = SpikeShapes(
+        spikes.times * 1000,
+        spikes.segments.values,
+        spikes.timestamps,
+        spikes.dt
+    )
     return CellWrapper[SpikeShapes](cell_path.info, spikes)
 
 def describe_spikes(
