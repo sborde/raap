@@ -1,11 +1,11 @@
-
-
+"""Parameter classes for the peri-trigger analysis workflow."""
 
 from pydantic import BaseModel
 
 from param_classes.workflows.input_output import InputDataParams, OutputParams
 
 class HistogramParams(BaseModel):
+    """Parameter class for histogram calculation."""
     bin_range: tuple[float, float] = (0.0, 0.0)
     bin_size: float = 0.0
     def __init__(
@@ -46,16 +46,24 @@ class HistogramParams(BaseModel):
 
 
 class PeriTriggerAnalysisParams(BaseModel):
+    """Parameter class for the peri-trigger analysis workflow."""
     trigger: str = ''
     spike_types: list[str] = []
-    trigger_condition: list[str] = []
     histogram: HistogramParams = HistogramParams()
     smooth_size: float = 0.0
+
+
+class PeriTriggerLatencyComparisonParams(BaseModel):
+    """Parameter class for groupwise comparison settings."""
+    trigger_condition: list[str] = []
+    detection_start: float = 0.0
 
 
 class PeriTriggerAnalysisWorkflowParams(BaseModel):
     """Parameter class for the episode analysis workflow."""
     data: InputDataParams = InputDataParams()
     input: dict = {}
+    palette: dict = {}
     output: OutputParams = OutputParams()
     analysis: PeriTriggerAnalysisParams = PeriTriggerAnalysisParams()
+    grouping: PeriTriggerLatencyComparisonParams = PeriTriggerLatencyComparisonParams()

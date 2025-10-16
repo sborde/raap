@@ -1,16 +1,20 @@
 
 
+import abc
 
 from collections import namedtuple
-from typing import Self
+from typing import Self, Protocol
 
 import numpy as np
 import pandas as pd
 
+from scipy.ndimage import gaussian_filter1d
+
 SpikeTypeResults = namedtuple("SpikeTypeResults", ['spike_type', 'result'])
 
-class Histogram:
 
+class Histogram:
+    """A class that represents a histogram."""
     def __init__(
         self,
         centers: np.ndarray,
@@ -25,18 +29,22 @@ class Histogram:
 
     @property
     def centers(self) -> np.ndarray:
+        """Get the centers of the histogram bins."""
         return self._centers
 
     @property
     def values(self) -> np.ndarray:
+        """Get the values of the histogram bins."""
         return self._values
 
     @property
     def data_unit(self) -> str:
+        """Get the data unit of the histogram."""
         return self._data_unit
 
     @property
     def value_unit(self) -> str:
+        """Get the value unit of the histogram."""
         return self._value_unit
 
 
@@ -67,18 +75,22 @@ class MultiTrialHistogram:
 
     @property
     def centers(self) -> np.ndarray:
+        """Get the centers of the histogram bins."""
         return self._centers
 
     @property
     def values(self) -> np.ndarray:
+        """Get the values of the histogram bins."""
         return self._values
 
     @property
     def data_unit(self) -> str:
+        """Get the data unit of the histogram."""
         return self._data_unit
 
     @property
     def value_unit(self) -> str:
+        """Get the value unit of the histogram."""
         return self._value_unit
 
     @property
@@ -96,7 +108,14 @@ class MultiTrialHistogram:
         return cls(centers, values, centers_unit, value_unit)
 
 
-class HistogramCalculator:
+class HistogramCalculatorLike(Protocol):
+    """Protocol for histogram calculator-like classes."""
+    @abc.abstractmethod
+    def __call__(self, data: np.ndarray) -> Histogram:
+        """Calculate the histogram."""
+
+
+class HistogramCalculator(HistogramCalculatorLike):
     """
     A class that calculates a histogram according the specified parameters.
     """
@@ -119,11 +138,10 @@ class HistogramCalculator:
             bin_size
         )
         self._centers = np.mean(
-            [self._edges[:-1], self._edges[1:]],
-            axis=0
+            [self._edges[:-1], self._edges[1:]], axis=0
         )
-
         self._data_multiplier = 1000 if data_unit == 'ms' else 1
+
 
     @property
     def centers(self) -> np.ndarray:
@@ -141,12 +159,9 @@ class HistogramCalculator:
         return self._data_unit
 
     def __call__(self, data: np.ndarray) -> Histogram:
+        """Calculate the histogram."""
         data *= self._data_multiplier
-        values, _ = np.histogram(
-            data,
-            bins=self._edges,
-            range=self._range
-        )
+        values, _ = np.histogram(data, bins=self._edges, range=self._range)
         value_unit = 'count'
         if self._value_unit == 'freq':
             values = (values / self._bin_size) * self._data_multiplier
@@ -163,10 +178,31 @@ class HistogramCalculator:
             value_unit=value_unit
         )
 
+
+class HistogramCalculatorGaussSmoother:
+    """Adapter class to smooth histograms after calculation."""
+    def __init__(
+        self, calculator: HistogramCalculatorLike, sigma: float
+    ):
+        self._base_calculator = calculator
+        self._sigma = sigma
+
+    def __call__(self, data: np.ndarray) -> Histogram:
+        """Calculate and smooth the histogram."""
+        raw_histogram = self._base_calculator(data)
+        smoothed_values = gaussian_filter1d(raw_histogram.values, self._sigma, axis=0)
+        return Histogram(
+            raw_histogram.centers,
+            smoothed_values,
+            raw_histogram.data_unit,
+            raw_histogram.value_unit
+        )
+
+
 def calculate_ptth(
     triggers: np.ndarray,
     events: np.ndarray,
-    calculator: HistogramCalculator,
+    calculator: HistogramCalculatorLike,
 ) -> MultiTrialHistogram:
     """
     Calculate the peritrigger time-histogram for a set of triggers and events.
@@ -183,7 +219,7 @@ def calculate_ptth(
 def calculate_ptth_for_events(
     triggers: np.ndarray,
     events: pd.DataFrame,
-    calculator: HistogramCalculator,
+    calculator: HistogramCalculatorLike,
 ) -> MultiTrialHistogram:
     """
     Calculate the peritrigger time-histogram for a set of triggers and events.
@@ -216,8 +252,9 @@ def calculate_ptth_for_spike_types(
     spikes: pd.DataFrame,
     triggers: np.ndarray,
     spike_types: list[str],
-    calculator: HistogramCalculator
+    calculator: HistogramCalculatorLike
 ) -> list[SpikeTypeResults]:
+    """Calculate triggered histograms around each trigger."""
     return [
         SpikeTypeResults(
             spike_type=spike_type,
