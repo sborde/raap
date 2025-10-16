@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 from tqdm import tqdm
 from scipy.stats import wilcoxon
@@ -47,8 +48,7 @@ def run_testing(
     test_results = []
     tester = PairedTester(params)
     for group_name, data in tqdm(groups, total=len(groups), desc='Testing groups'):
-        result = tester(data)
-        result['group'] = group_name
+        result = tester(data, group_name)
         test_results.append(result)
     result = pd.DataFrame(test_results)
     result = result[['group', 'n', 'diff_median', 'pvalue']]
@@ -93,8 +93,8 @@ class IndividualSpikeTypePTTHAnalysis:
     def _calculate(self, spikes: DataFrame, triggers: np.ndarray) -> DataFrame:
         """Calculate histograms for the given spikes and triggers."""
         histograms = calculate_ptth_for_spike_types(
-                spikes, triggers, self._spike_types, self._calculate_histograms
-            )
+            spikes, triggers, self._spike_types, self._calculate_histograms
+        )
         return pd.concat([
             convert_spike_result_to_df(result) for result
             in histograms
@@ -115,6 +115,7 @@ class SpikeTypePTTHLatencyDetection:
     """Class to aggregate peri-trigger time histogram results across multiple cells."""
 
     def __init__(self, params: PeriTriggerAnalysisWorkflowParams):
+        self._palette = params.palette
         self._spike_types = params.analysis.spike_types
         self._trigger_condition = params.grouping.trigger_condition
         self._detection_start = params.grouping.detection_start
@@ -199,20 +200,35 @@ class SpikeTypePTTHLatencyDetection:
 
         cell_names = histograms.columns[2:]
         for cell_name in cell_names:
-            fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+            fig, ax = plt.subplots(1, 1, figsize=(10, 5))
             cell_data = histograms[['spike_type', 'centers', cell_name]]
             cell_points = points[points['cell'] == cell_name]
             for i, spike_type in enumerate(self._spike_types):
                 spike_data = cell_data[cell_data['spike_type'] == spike_type]
                 spike_points = cell_points[cell_points['spike_type'] == spike_type]
 
-                ax = axes[i]
-                ax.plot(spike_data['centers'], spike_data[cell_name])
-                ax.scatter(spike_points['time'], spike_points['value'])
-                ax.set_title(spike_type)
-                ax.legend([], [], frameon=False)
+                if spike_type == 'AIS-AP':
+                    color = self._palette['cell_type'][group_name]
+                else:
+                    color = self._palette['spike_type']['RA-AP']
 
-            plt.suptitle(cell_name)
+                ax.plot(
+                    spike_data['centers'],
+                    spike_data[cell_name],
+                    color=color,
+                    label=spike_type
+                )
+                ax.scatter(
+                    spike_points['time'],
+                    spike_points['value'],
+                    color='black',
+                    marker='x',
+                    s=50
+                )
+            ax.set_xlabel('Time (ms)')
+            ax.set_title(cell_name)
+            ax.legend()
+
             plt.tight_layout()
             fig.savefig(
                 group_fig_dir / f'{cell_name}_{self._suffix}_detection.png'
@@ -242,24 +258,73 @@ class PairedTester:
     """Class to perform statistical testing on paired data."""
     def __init__(self, params: PeriTriggerAnalysisWorkflowParams):
         self._spike_types = params.analysis.spike_types
+        self._palette = params.palette
+        self._paths = {
+            'figures': Path(params.output.path) / '02_figures'
+        }
+        for path in self._paths.values():
+            path.mkdir(parents=True, exist_ok=True)
 
-    def __call__(self, data: DataFrame) -> dict:
-        """Perform statistical testing on the given DataFrame."""
-        test_frame = pd.pivot(
-            data,
-            index='cell',
-            columns='spike_type',
-            values='time'
+    def _create_pivot(self, data: DataFrame) -> DataFrame:
+        """Pivot the DataFrame to have spike types as columns."""
+        return pd.pivot(
+            data, index='cell', columns='spike_type', values='time'
         ).dropna()
+
+    def _plot_comparison(self, data: DataFrame, group_name: str):
+        """Plot a comparison of the two spike types."""
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+        sns.boxplot(
+            data=data,
+            x='spike_type',
+            y='time',
+            hue='spike_type',
+            legend=False,
+            palette=[self._palette['cell_type'][group_name], self._palette['spike_type']['RA-AP']],
+            fill=False,
+            fliersize=0,
+            width=0.5,
+            ax=ax
+        )
+        pivot = self._create_pivot(data)
+        for _, row in pivot.iterrows():
+            ax.plot(
+                self._spike_types,
+                [row[self._spike_types[0]], row[self._spike_types[1]]],
+                color='#808080',
+                alpha=0.5
+            )
+            ax.scatter(
+                self._spike_types,
+                [row[self._spike_types[0]], row[self._spike_types[1]]],
+                marker='o',
+                edgecolor='none',
+                facecolor='#808080',
+                alpha=0.7
+            )
+
+        ax.set_ylabel('Time (ms)')
+        ax.set_title(group_name)
+        ax.legend([], [], frameon=False)
+        plt.tight_layout()
+        fig_path = self._paths['figures'] / f'{group_name}_comparison.png'
+        fig.savefig(fig_path)
+        plt.close(fig)
+
+    def __call__(self, data: DataFrame, group_name: str) -> dict:
+        """Perform statistical testing on the given DataFrame."""
+        test_frame = self._create_pivot(data)
         stat_result = wilcoxon(
             test_frame[self._spike_types[0]],
             test_frame[self._spike_types[1]]
         )
+        self._plot_comparison(data, group_name)
         return {
+            'group': group_name,
+            'n': len(test_frame),
             'diff_median': np.median(
                 test_frame[self._spike_types[0]] -
                 test_frame[self._spike_types[1]]
             ),
             'pvalue': stat_result.pvalue, # type: ignore
-            'n': len(test_frame)
         }
