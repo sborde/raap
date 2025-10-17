@@ -1,11 +1,14 @@
 """Workflow to perform peri-trigger time histogram analysis."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+from collections import namedtuple
 
 from tqdm import tqdm
 from scipy.stats import wilcoxon
@@ -22,6 +25,14 @@ from triggered_firing.exporters import convert_spike_result_to_df
 
 from workflows.run_util.io import ResultPaths
 
+
+@dataclass
+class CellPTTHAggregate:
+    """A class that stores a results of a groupwise PTTH aggregation."""
+    histograms: DataFrame
+    maxpoints: DataFrame
+
+
 def run_analysis(
     input_files: list[CellWrapper[ResultPaths]],
     params: PeriTriggerAnalysisWorkflowParams
@@ -34,23 +45,23 @@ def run_aggregation(
     input_files: list[CellWrapper[DataFrame]],
     group_name: str,
     params: PeriTriggerAnalysisWorkflowParams
-) -> tuple[str, DataFrame]:
+) -> tuple[str, CellPTTHAggregate]:
     """Run the cell-wise aggregation workflow on the given input files."""
-    aggregator = SpikeTypePTTHLatencyDetection(params)
-    max_points = aggregator(input_files, group_name)
-    return (group_name, max_points)
+    aggregator = CellwisePTTHLatencyDetection(params)
+    aggregation = aggregator(input_files, group_name)
+    return (group_name, aggregation)
 
 def run_testing(
-    groups: list[tuple[str, DataFrame]],
+    groups: list[tuple[str, CellPTTHAggregate]],
     params: PeriTriggerAnalysisWorkflowParams
 ):
     """Run statistical testing on the given groups."""
     test_results = []
     tester = PairedTester(params)
     for group_name, data in tqdm(groups, total=len(groups), desc='Testing groups'):
-        result = tester(data, group_name)
+        result = tester(data.maxpoints, group_name)
         test_results.append(result)
-    result = pd.DataFrame(test_results)
+    result = DataFrame(test_results)
     result = result[['group', 'n', 'diff_median', 'pvalue']]
     stats_path = Path(params.output.path) / '03_statistics'
     stats_path.mkdir(parents=True, exist_ok=True)
@@ -111,7 +122,7 @@ class IndividualSpikeTypePTTHAnalysis:
         return cell_result
 
 
-class SpikeTypePTTHLatencyDetection:
+class CellwisePTTHLatencyDetection:
     """Class to aggregate peri-trigger time histogram results across multiple cells."""
 
     def __init__(self, params: PeriTriggerAnalysisWorkflowParams):
@@ -119,14 +130,15 @@ class SpikeTypePTTHLatencyDetection:
         self._spike_types = params.analysis.spike_types
         self._trigger_condition = params.grouping.trigger_condition
         self._detection_start = params.grouping.detection_start
+        self._ylim = params.analysis.ylim
         self._suffix = (
             f'{params.analysis.trigger}' +
             f'_{params.analysis.histogram.value_unit}_mean'
         )
         self._paths = {
             'results': Path(params.output.path) / '01_results' / 'grouped',
-            'figures': Path(params.output.path) / '02_figures',
-            'cellwise_figures': Path(params.output.path) / '02_figures' / 'individual'
+            'cellwise_figures': Path(params.output.path) / '02_figures' / 'individual',
+            'groupwise_figures': Path(params.output.path) / '02_figures' / 'groupwise'
         }
         for path in self._paths.values():
             path.mkdir(parents=True, exist_ok=True)
@@ -151,7 +163,7 @@ class SpikeTypePTTHLatencyDetection:
             )
         return all_values[:, flag]
 
-    def _aggregate(self, cells: list[CellWrapper[DataFrame]]) -> DataFrame:
+    def _cellwise_aggregate(self, cells: list[CellWrapper[DataFrame]]) -> DataFrame:
         """Aggregate values within a single cell."""
         values = {}
         for cell in cells:
@@ -164,6 +176,19 @@ class SpikeTypePTTHLatencyDetection:
                 **values
             }
         )
+
+    def _groupwise_aggregate(self, cells: DataFrame) -> DataFrame:
+        """Aggregate values"""
+        values = cells.iloc[:, 2:].to_numpy()
+        mean_values = np.mean(values, axis=1)
+        sd_values = np.std(values, axis=1)
+        sem_values = sd_values / np.sqrt(values.shape[1])
+        return DataFrame({
+            'spike_types': cells['spike_type'],
+            'centers': cells['centers'],
+            'mean': mean_values,
+            'sem': sem_values
+        })
 
     def _find_max_points(self, frame: DataFrame) -> DataFrame:
         """Find the maximum time value in the DataFrame."""
@@ -225,21 +250,93 @@ class SpikeTypePTTHLatencyDetection:
                     marker='x',
                     s=50
                 )
+            ax.set_ylim(self._ylim)
             ax.set_xlabel('Time (ms)')
             ax.set_title(cell_name)
             ax.legend()
 
             plt.tight_layout()
+            figure_name = f'{cell_name}_{self._suffix}_detection'
             fig.savefig(
-                group_fig_dir / f'{cell_name}_{self._suffix}_detection.png'
+                group_fig_dir / f'{figure_name}.png',
+                dpi=100,
+                format='png'
             )
+            with plt.rc_context({'svg.fonttype': 'none'}):
+                fig.savefig(
+                    group_fig_dir / f'{figure_name}.svg',
+                    format='svg'
+                )
             plt.close(fig)
+
+    def _plot_grouped_detection(
+        self,
+        histograms: DataFrame,
+        points: DataFrame,
+        group_name: str
+    ):
+        """Plots the group average histogram per spike-type and the detected points."""
+        groupwise_aggregate = self._groupwise_aggregate(histograms)
+
+        fig = plt.figure(figsize=(10, 5))
+        gs = fig.add_gridspec(2, 1, height_ratios=[0.2, 0.8], hspace=0.05)
+        ax_top = fig.add_subplot(gs[0, 0])
+        ax_bottom = fig.add_subplot(gs[1, 0], sharex=ax_top)
+        ax_top.set_axis_off()
+        for spike_type in self._spike_types:
+            spike_data = groupwise_aggregate[
+                groupwise_aggregate['spike_types'] == spike_type
+            ]
+            if spike_type == 'AIS-AP':
+                color = self._palette['cell_type'][group_name]
+            else:
+                color = self._palette['spike_type']['RA-AP']
+
+            ax_bottom.fill_between(
+                spike_data['centers'],
+                spike_data['mean'] - spike_data['sem'],
+                spike_data['mean'] + spike_data['sem'],
+                color=color,
+                alpha=0.3
+            )
+            ax_bottom.plot(
+                spike_data['centers'],
+                spike_data['mean'],
+                color=color,
+                label=spike_type
+            )
+
+            ax_bottom.set_ylim(self._ylim)
+            ax_bottom.set_xlabel('Time (ms)')
+            ax_bottom.legend()
+
+        sns.boxplot(
+            data=points,
+            x='time',
+            y='spike_type',
+            hue='spike_type',
+            orient='h',
+            palette=[self._palette['cell_type'][group_name], self._palette['spike_type']['RA-AP']],
+            ax=ax_top
+        )
+        figure_name = f'{group_name}_{self._suffix}_detection'
+        fig.savefig(
+            self._paths['groupwise_figures'] / f'{figure_name}.png',
+            dpi=100,
+            format='png'
+        )
+        with plt.rc_context({'svg.fonttype': 'none'}):
+            fig.savefig(
+                self._paths['groupwise_figures'] / f'{figure_name}.svg',
+                format='svg'
+            )
+        plt.close(fig)
 
     def __call__(
         self, input_files: list[CellWrapper[DataFrame]], group_name: str
-    ) -> DataFrame:
+    ) -> CellPTTHAggregate:
         """Aggregate results from multiple input files."""
-        aggregation = self._aggregate(input_files)
+        aggregation = self._cellwise_aggregate(input_files)
         max_points = self._find_max_points(aggregation)
         aggregation.to_excel(
             self._paths['results'] / f'{group_name}_{self._suffix}_histograms.xlsx',
@@ -251,7 +348,8 @@ class SpikeTypePTTHLatencyDetection:
         )
 
         self._plot_cellwise_detection(aggregation, max_points, group_name)
-        return max_points
+        self._plot_grouped_detection(aggregation, max_points, group_name)
+        return CellPTTHAggregate(aggregation, max_points)
 
 
 class PairedTester:
@@ -259,8 +357,9 @@ class PairedTester:
     def __init__(self, params: PeriTriggerAnalysisWorkflowParams):
         self._spike_types = params.analysis.spike_types
         self._palette = params.palette
+        self._ylim = params.grouping.boxplot_ylim
         self._paths = {
-            'figures': Path(params.output.path) / '02_figures'
+            'figures': Path(params.output.path) / '02_figures' / 'statistics'
         }
         for path in self._paths.values():
             path.mkdir(parents=True, exist_ok=True)
@@ -303,12 +402,16 @@ class PairedTester:
                 alpha=0.7
             )
 
+        ax.set_ylim(self._ylim)
         ax.set_ylabel('Time (ms)')
         ax.set_title(group_name)
         ax.legend([], [], frameon=False)
         plt.tight_layout()
-        fig_path = self._paths['figures'] / f'{group_name}_comparison.png'
-        fig.savefig(fig_path)
+
+        fig_name = self._paths['figures'] / f'{group_name}_comparison'
+        fig.savefig(f'{fig_name}.png', dpi=100, format='png')
+        with plt.rc_context({'svg.fonttype': 'none'}):
+            fig.savefig(f'{fig_name}.svg', format='svg')
         plt.close(fig)
 
     def __call__(self, data: DataFrame, group_name: str) -> dict:

@@ -51,12 +51,14 @@ class PeriTriggerAnalysisParams(BaseModel):
     spike_types: list[str] = []
     histogram: HistogramParams = HistogramParams()
     smooth_size: float = 0.0
+    ylim: tuple[float, float] = (0.0, 0.0)
 
 
 class PeriTriggerLatencyComparisonParams(BaseModel):
     """Parameter class for groupwise comparison settings."""
     trigger_condition: list[str] = []
     detection_start: float = 0.0
+    boxplot_ylim: tuple[float, float] = (0.0, 0.0)
 
 
 class PeriTriggerAnalysisWorkflowParams(BaseModel):
