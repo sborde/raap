@@ -97,11 +97,16 @@ if __name__ == "__main__":
             plt.plot(
                 subset['spike_type'],
                 subset['value'],
-                markersize=10,
-                marker='o',
                 linestyle='-',
                 label=name,
                 linewidth=2,
+            )
+            plt.plot(
+                subset['spike_type'],
+                subset['value'],
+                edgecolors='none',
+                markersize=10,
+                marker='o',
             )
         plt.ylim(feature['limit'])
         plt.title(f'Comparison of {feature["name"]}, p={res.pvalue:.3f}') # type: ignore

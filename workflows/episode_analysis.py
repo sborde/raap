@@ -365,12 +365,19 @@ class BetweenEpisodeComparisonWorkflow:
                     subset['episode'],
                     subset[spike_type],
                     color=spike_color,
-                    markersize=10,
-                    marker='o',
                     linestyle='-',
                     label=name,
                     linewidth=2,
                 )
+                ax.scatter(
+                    subset['episode'],
+                    subset[spike_type],
+                    color=spike_color,
+                    edgecolors='none',
+                    s=10,
+                    marker='o'
+                )
+
 
             ax.set_title(spike_type)
             ax.set_ylabel("Mean firing rate (Hz)")
@@ -418,7 +425,7 @@ class BetweenEpisodeComparisonWorkflow:
             return
         results.to_excel(
             self._output_dirs['results'] /
-            f'{group_name}_cellwise_aggregate.xlsx', 
+            f'{group_name}_cellwise_aggregate.xlsx',
             index=False
         )
 
@@ -428,7 +435,7 @@ class BetweenEpisodeComparisonWorkflow:
             return
         stats.to_excel(
             self._output_dirs['stats'] /
-            f'{group_name}_statistical_comparison.xlsx', 
+            f'{group_name}_statistical_comparison.xlsx',
             index=False
         )
 
@@ -468,8 +475,7 @@ class BetweenSpikeTypeInEpisodeComparisonWorkflow:
         group_results = self._aggregate_cells(group.members)
         self._save_results(group_results, group.name)
 
-        fig = self._plot_results(group_results, group.name)
-        self._save_figure(fig, group.name)
+        self._plot_results(group_results, group.name)
 
         stat_results = self._perform_statistical_comparison(group_results)
         self._save_statistics(stat_results, group.name)
@@ -522,13 +528,20 @@ class BetweenSpikeTypeInEpisodeComparisonWorkflow:
         """Perform statistical comparison between episodes."""
         stat_results = []
         print(results)
-        for i, episode in enumerate(self._episodes):
+        for episode in self._episodes:
             subset = results[results['episode'] == episode]
-            values = [subset[spike_type].values for spike_type in self._spike_types]
+            has_episode = np.logical_not(np.isnan(subset[self._spike_types[0]]))
+            valid_samples = subset.loc[has_episode, :]
+            values = [
+                valid_samples[spike_type].values
+                for spike_type in self._spike_types
+            ]
             res = wilcoxon(values[0], values[1])
 
             stat_results.append({
                 'episode': episode,
+                'n_all': subset.shape[0],
+                'n_valid': len(valid_samples),
                 'spike_type_1': self._spike_types[0],
                 'spike_type_2': self._spike_types[1],
                 'difference': np.nanmedian(
@@ -542,17 +555,17 @@ class BetweenSpikeTypeInEpisodeComparisonWorkflow:
 
     def _plot_results(
         self, results: DataFrame, group_name: str
-    ) -> Figure:
+    ):
         """Plot the results of the group analysis."""
-        n_episodes = len(self._episodes)
-        fig, axes = plt.subplots(1, n_episodes, figsize=(8, 6), sharey=True)
-        for ax, episode in zip(axes, self._episodes):
+        for episode in self._episodes:
+            fig, ax = plt.subplots(1, 1, figsize=(8, 6), sharey=True)
             subset = results.loc[
                 results['episode'] == episode,
                 ['name', 'ratio'] + self._spike_types
             ]
+            has_episode = np.logical_not(np.isnan(subset[self._spike_types[0]]))
             long_df = pd.melt(
-                subset,
+                subset.loc[has_episode, :],
                 id_vars=['name', 'ratio'],
                 value_vars=self._spike_types,
                 var_name='spike_type',
@@ -579,11 +592,17 @@ class BetweenSpikeTypeInEpisodeComparisonWorkflow:
                     cell_subset['spike_type'],
                     cell_subset['frequency'],
                     color=episode_color,
-                    markersize=10,
-                    marker='o',
                     linestyle='-',
                     label=name,
                     linewidth=2,
+                )
+                ax.scatter(
+                    cell_subset['spike_type'],
+                    cell_subset['frequency'],
+                    color=episode_color,
+                    edgecolors='none',
+                    s=10,
+                    marker='o'
                 )
 
             mean_ratio = (
@@ -591,13 +610,14 @@ class BetweenSpikeTypeInEpisodeComparisonWorkflow:
                 if np.any(~np.isnan(subset['ratio']))
                 else np.nan
             )
-            ax.set_title(f"{episode} ratio: {mean_ratio:.2f}")
+            ax.set_title(
+                f"{group_name} {episode} ratio: {mean_ratio:.2f}" +
+                f"n={sum(has_episode)}/{subset.shape[0]}"
+            )
             ax.set_ylabel("Mean firing rate (Hz)")
             ax.set_xlabel("Spike type")
 
-        plt.suptitle(group_name)
-        plt.tight_layout()
-        return fig
+            self._save_figure(fig, f'{group_name}_{episode}')
 
     def _save_figure(self, fig: Figure, group_name: str) -> None:
         """Save the figure of the group analysis."""
