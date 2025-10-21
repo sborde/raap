@@ -47,3 +47,10 @@ class NormalizedInterRaapFiringWorkflowParams(BaseModel):
     palette: dict = {}
     output: OutputParams = OutputParams()
     analysis: InterMarkerIntervalAnalysis = InterMarkerIntervalAnalysis()
+
+class InterRaapSpikeCountFiringWorkflowParams(BaseModel):
+    """Parameter class for the inter RA-AP spike count firing workflow."""
+    data: InputDataParams = InputDataParams()
+    input: dict = {}
+    palette: dict = {}
+    output: OutputParams = OutputParams()
