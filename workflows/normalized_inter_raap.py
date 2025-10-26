@@ -1,14 +1,18 @@
 
 
+import abc
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol, Sequence
 from matplotlib import pyplot as plt
 import numpy as np
 
 from pandas import DataFrame
 
+from analyses.model import RecordingWithSpikes
 from common.data_utils import CellWrapper
 from param_classes.workflows.normalized_inter_raap import (
+    InterRaapSpikeCountFiringWorkflowParams,
     NormalizedInterRaapFiringWorkflowParams
 )
 from triggered_firing.calculators import Histogram, MultiTrialHistogram
@@ -26,12 +30,25 @@ def run_analysis(
 
 def run_inter_raap_spike_count_analysis(
     input_files: list[CellWrapper[ResultPaths]],
-    params: NormalizedInterRaapFiringWorkflowParams
+    params: InterRaapSpikeCountFiringWorkflowParams
 ):
     """Run the inter RA-AP spike count firing workflow on the given input files."""
     analysis = InterRaapSpikeCountFiringWorkflow(params)
     for cell in input_files:
         analysis(cell)
+
+
+class IntervalLike(Protocol):
+    """Protocol for interval-like objects."""
+    @property
+    @abc.abstractmethod
+    def start(self) -> float:
+        """Get the start of the interval."""
+
+    @property
+    @abc.abstractmethod
+    def end(self) -> float:
+        """Get the end of the interval."""
 
 
 @dataclass
@@ -48,6 +65,13 @@ class Interval:
     def contained(self, events: np.ndarray) -> np.ndarray:
         """Get the events contained within the interval."""
         return events[(events >= self.start) & (events <= self.end)]
+
+
+@dataclass
+class IntervalRelatedEvents:
+    """Class representing events related to an interval."""
+    interval: Interval
+    events: np.ndarray
 
 
 class NormalizedInterRaapFiringWorkflow:
@@ -168,46 +192,63 @@ class NormalizedInterRaapFiringWorkflow:
         cut_end = interval.start + self._cut_window.end * interval.duration
         return Interval(cut_start, cut_end)
 
+
 class InterRaapSpikeCountFiringWorkflow:
     """
     Workflow for counting the AIS-AP spikes in inter-RA-AP intervals.
     """
-    def __init__(self, params: NormalizedInterRaapFiringWorkflowParams):
+    def __init__(self, params: InterRaapSpikeCountFiringWorkflowParams):
         self._palette = params.palette
+        self._episode_names = params.analysis.episodes
 
         self._results_dir = Path(params.output.path) / '01_results'
         self._results_dir.mkdir(parents=True, exist_ok=True)
         self._figures_dir = Path(params.output.path) / '02_figures'
         self._figures_dir.mkdir(parents=True, exist_ok=True)
 
-
     def __call__(self, cell: CellWrapper[ResultPaths]):
         """Process a single input file and return the results."""
         data = cell.data.load()
-        histogram = self._calculate(data.spikes)
-        cell_result = CellWrapper(cell.info, histogram)
+        episode_histograms = self._calculate(data)
+        cell_result = CellWrapper(cell.info, episode_histograms)
         self._plot(cell_result)
         # self._save_result(cell_result)
 
     def _calculate(
-        self, spike_data: DataFrame
+        self, cell_data: RecordingWithSpikes
+    ) -> list[tuple[str, Histogram]]:
+        histograms = []
+        for episode_name in self._episode_names:
+            try:
+                episodes = list(cell_data.recording.get_episode(episode_name))
+                histogram = self._calculate_for_episode(
+                    cell_data.spikes, episodes
+                )
+                histograms.append((episode_name, histogram))
+            except KeyError as e:
+                print(f"Episode '{episode_name}' is missing, skip. {e}")
+        return histograms
+
+    def _calculate_for_episode(
+        self, spike_data: DataFrame, episodes: Sequence[IntervalLike]
     ) -> Histogram:
         """Calculate the normalized inter RA-AP interval firing histogram."""
-        type_vector = spike_data['spike_type'].to_numpy()
-        timestamps = spike_data['timestamp'].to_numpy()
-        interval_events = self._collect(
-            timestamps[type_vector == 'RA-AP'],
-            timestamps[type_vector == 'AIS-AP']
-        )
+        results = []
+        for episode in episodes:
+            episode_spikes = get_spikes_in_interval(episode, spike_data)
+            type_vector = episode_spikes['spike_type'].to_numpy()
+            timestamps = episode_spikes['timestamp'].to_numpy()
+            interspike_events = self._collect(
+                timestamps[type_vector == 'RA-AP'],
+                timestamps[type_vector == 'AIS-AP']
+            )
+            results += interspike_events
 
-        results = sorted(
-            [(interval.duration, len(events)) for interval, events in interval_events],
-            key=lambda x: x[0]
-        )
+        results = sorted(results, key=lambda x: x.interval.duration)
 
         histograms = Histogram(
-            centers=np.array([r[0] for r in results]),
-            values=np.array([[r[1]] for r in results]),
+            centers=np.array([r.interval.duration for r in results]),
+            values=np.array([[len(r.events)] for r in results]),
             data_unit='s',
             value_unit='count'
         )
@@ -216,33 +257,69 @@ class InterRaapSpikeCountFiringWorkflow:
 
     def _collect(
         self, markers: np.ndarray, events: np.ndarray
-    ) -> list[tuple[Interval, np.ndarray]]:
+    ) -> list[IntervalRelatedEvents]:
         """Collect spikes within the given intervals."""
         intervals = convert_markers_to_intervals(markers)
         return collect_event_subsequences(intervals, events)
 
-    def _plot(self, cell_result: CellWrapper[Histogram]) -> None:
+    def _plot(self, cell_result: CellWrapper[list[tuple[str, Histogram]]]) -> None:
         """Plot the results."""
-        cell_color = self._palette['cell_type'][cell_result.info.cell_type]
-        fig, ax  = plt.subplots(1, 1, figsize=(8, 3))
-        histogram = cell_result.data
-        ax.plot(
-            histogram.centers,
-            histogram.values,
-            '-',
-            color=cell_color
-        )
-        ax.set_title(cell_result.info.name)
+        fig, ax  = plt.subplots(len(cell_result.data), 1, figsize=(8, 3))
+        histograms = cell_result.data
+        for i, (episode_name, histogram) in enumerate(histograms):
+            color = self._palette['episode'][episode_name]
+            ax[i].plot(
+                histogram.centers,
+                histogram.values,
+                '-',
+                color=color,
+                label=episode_name
+            )
+            ax[i].legend([], [], frameon=False)
+            ax[i].set_title(episode_name)
+        plt.suptitle(cell_result.info.name)
         plt.show()
+
+def collect_spikes_in_episode(
+    intervals: Sequence[IntervalLike],
+    spike_data: DataFrame
+) -> DataFrame:
+    """Collect spikes within the given episodes."""
+    flag = np.zeros(len(spike_data), dtype=bool)
+    for interval in intervals:
+        flag |= (
+            (spike_data['timestamp'] >= interval.start) &
+            (spike_data['timestamp'] <= interval.end)
+        )
+    return spike_data[flag]
+
+def get_spikes_in_interval(
+    interval: IntervalLike, spike_data: DataFrame
+) -> DataFrame:
+    """Get spikes within the given interval."""
+    return spike_data[
+        (spike_data['timestamp'] >= interval.start) &
+        (spike_data['timestamp'] <= interval.end)
+    ]
 
 def collect_event_subsequences(
     intervals: list[Interval],
     events: np.ndarray
-) -> list[tuple[Interval, np.ndarray]]:
+) -> list[IntervalRelatedEvents]:
     """Collect event subsequences within the given intervals."""
     return [
-        (interval, interval.contained(events)) for interval in intervals
+        IntervalRelatedEvents(interval, interval.contained(events))
+        for interval in intervals
     ]
+
+def convert_segmented_markers_to_intervals(
+    segmented_markers: list[np.ndarray]
+) -> list[Interval]:
+    """Convert segmented spike times to inter-spike intervals."""
+    intervals = []
+    for markers in segmented_markers:
+        intervals.extend(convert_markers_to_intervals(markers))
+    return intervals
 
 def convert_markers_to_intervals(markers: np.ndarray) -> list[Interval]:
     """Convert spike times to inter-spike intervals."""
