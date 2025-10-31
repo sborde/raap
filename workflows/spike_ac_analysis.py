@@ -114,9 +114,17 @@ class SpikeACAnalysis:
 
     def _calculate_ac(self, spikes: np.ndarray) -> Histogram:
         """Calculate the autocorrelation histogram for the given spikes."""
+
+        if len(spikes) == 0:
+            return Histogram(
+                self._centers,
+                np.zeros_like(self._centers),
+                'ms',
+                self._value_unit
+            )
+
         sweeps = []
-        for i in range(len(spikes)):
-            trigger = spikes[i]
+        for i, trigger in enumerate(spikes):
             other_spikes = (np.delete(spikes, i) - trigger) * 1000
             sweeps.append(np.histogram(other_spikes, bins=self._bins)[0])
         values = np.mean(np.stack(sweeps, axis=1), axis=1)
