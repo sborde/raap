@@ -225,7 +225,7 @@ def select_during_episode(
 
 def save_figure(path: Path, fig: Figure, name: str):
     """Save the given figure to the specified path in PNG and SVG formats."""
-    fig.savefig(f'{path}/{name}.png', format='png', dpi=300)
+    fig.savefig(f'{path}/{name}.png', format='png', dpi=300, bbox_inches='tight')
     with plt.rc_context({'svg.fonttype': 'none'}):
-        fig.savefig(f'{path}/{name}.svg', format='svg')
+        fig.savefig(f'{path}/{name}.svg', format='svg', bbox_inches='tight')
     plt.close(fig)
