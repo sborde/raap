@@ -57,6 +57,12 @@ class InputDataParams(BaseModel):
         } | self.spike_features.model_dump()
 
 
+class GroupInfoParams(BaseModel):
+    """Parameter class for grouping information settings."""
+    path: str = ''
+    column_name: str = ''
+    groups: list[str] = []
+
 class GroupingInputParams(BaseModel):
     """Parameter class for grouping input settings."""
     results: CellwiseResultsPathParams = CellwiseResultsPathParams()

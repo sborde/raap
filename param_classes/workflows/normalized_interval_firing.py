@@ -39,7 +39,7 @@ class NormalizedIntervaFiringAnalysisParams(BaseModel):
     bin_size: float = 0.0
     bin_range: tuple[float, float] = (0.0, 0.0)
     smooth_size: float = 0.0
-    episode: str = ''
+    episodes: list[str] = []
     ylim: tuple[float, float] = (0.0, 0.0)
 
 class NormalizedIntervalFiringWorkflowParams(BaseModel):
