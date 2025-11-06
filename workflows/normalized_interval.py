@@ -54,6 +54,7 @@ class NormalizedIntervalFiringWorkflow:
         )
         self._bin_size = params.bin_size
         self._value_unit = params.values
+        self._ylim = params.ylim
 
         self._paths = None
         if config.output.path:
@@ -174,7 +175,7 @@ class NormalizedIntervalFiringWorkflow:
                 )
 
             raster_ax.set_ylabel(f"#{episode_name.capitalize()}")
-
+            hist_ax.set_ylim(self._ylim)
             hist_ax.set_xlabel('Normalized time')
 
             if self._value_unit == 'count':
