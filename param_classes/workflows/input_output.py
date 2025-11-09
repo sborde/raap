@@ -59,9 +59,13 @@ class InputDataParams(BaseModel):
 
 class GroupInfoParams(BaseModel):
     """Parameter class for grouping information settings."""
+    flag: int = 0
     path: str = ''
     column_name: str = ''
     groups: list[str] = []
+    episodes: list[str] = []
+    spike_types: list[str] = []
+    conditions: list[str] = []
 
 class GroupingInputParams(BaseModel):
     """Parameter class for grouping input settings."""

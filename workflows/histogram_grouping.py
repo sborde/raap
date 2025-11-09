@@ -1,5 +1,6 @@
 """A module for functions that groups and aggregates histogram results."""
 
+import functools
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -10,44 +11,57 @@ from matplotlib.figure import Figure
 from common.data_utils import CellInfo, CellWrapper
 from param_classes.workflows.histogram_grouping import HistogramGroupingWorkflowConfig
 from param_classes.workflows.input_output import GroupInfoParams
-from workflows.normalized_interval import EpisodeRelatedResults
+from workflows.normalized_interval import EpisodeRelatedResults, convert_episode_result_to_frame
+from workflows.result_classes import AnalysisResult
 
-GroupedResults = tuple[str, list[CellWrapper[EpisodeRelatedResults]]]
+GroupedResults = tuple[str, list[AnalysisResult[EpisodeRelatedResults]]]
 
 def run_grouped_analysis(
-    config: HistogramGroupingWorkflowConfig,
+    config: GroupInfoParams,
     cell_results: list[CellWrapper[EpisodeRelatedResults]]
 ):
     """Performs the groupwise analysis"""
     processor = HistogramGroupingWorkflow(config)
-    groups = create_groups(cell_results, config.grouping)
+    flat_results = flatten_results(cell_results)
+    groups = create_groups(flat_results, config)
     for group in groups:
         processor(group)
 
+def flatten_results(
+    cell_results: list[CellWrapper[EpisodeRelatedResults]]
+) -> pd.DataFrame:
+    """Converts hierarchical results into a list of results with attributes."""
+    flat_frames = []
+    for cell in cell_results:
+        for episode_name, episode_result in cell.data.items():
+            frame = convert_episode_result_to_frame(episode_result, episode_name)
+            frame.insert(0, 'group', cell.info.cell_type)
+            frame.insert(0, 'name', cell.info.name)
+            flat_frames.append(frame)
+    return pd.concat(flat_frames, ignore_index=True)
+
 def create_groups(
-    cell_results: list[CellWrapper[EpisodeRelatedResults]],
+    results: list[AnalysisResult[EpisodeRelatedResults]],
     params: GroupInfoParams
 ) -> list[GroupedResults]:
     """
     Returns the CellInfo objects grouped according to the input table.
     """
     table = pd.read_excel(params.path)
-    group_ids = get_selected_group_names(
+    collect_members = functools.partial(
+        collect_member_names,
+        table=table,
+        column_name=params.column_name
+    )
+    selected_ids = collect_selected_group_ids(
         table, params.column_name, params.groups
     )
     return [
-        make_group(
-            cell_results,
-            group_id, 
-            list_member_names(
-                table,
-                group_id,
-                params.column_name
-            )
-        ) for group_id in group_ids
+        make_group(results, group_id, collect_members(group_id))
+        for group_id in selected_ids
     ]
 
-def get_selected_group_names(
+def collect_selected_group_ids(
     table: pd.DataFrame, column_name: str, group_names: list[str]
 ):
     """
@@ -57,19 +71,18 @@ def get_selected_group_names(
     group_ids = table[column_name].unique()
     if group_names:
         return [gid for gid in group_ids if gid in set(group_names)]
-    return [gid for gid in group_ids if not np.isnan(gid)]
+    return [gid for gid in group_ids if gid]
 
-def list_member_names(
-    table: pd.DataFrame, group_id: str, column_name: str
+def collect_member_names(
+    group_id: str, table: pd.DataFrame, column_name: str
 ) -> list[str]:
     """
     Returns the list of member names for the specified group.
     """
-    members = table[table[column_name] == group_id]
-    return [row['name'] for _, row in members.iterrows()]
+    return table[table[column_name] == group_id]['name'].tolist()
 
 def make_group(
-    cell_results: list[CellWrapper],
+    cell_results: list[AnalysisResult],
     group_id: str,
     cell_names: list[str]
 ) -> GroupedResults:
@@ -78,7 +91,10 @@ def make_group(
     """
     members = [
         cell for cell in cell_results
-        if cell.info.name in set(cell_names)
+        if (
+            cell.attributes['name'] in set(cell_names) and
+            cell.attributes['group'] == group_id
+        )
     ]
     return (group_id, members)
 
@@ -87,7 +103,8 @@ class HistogramGroupingWorkflow:
     """
     Workflow for grouping and aggregating histogram results.
     """
-    def __init__(self, config: HistogramGroupingWorkflowConfig):
+    def __init__(self, config: GroupInfoParams):
+        self._params = config
         self._palette = config.palette
         self._paths = None
         if config.output.path:
@@ -107,6 +124,12 @@ class HistogramGroupingWorkflow:
         properties.
         """
         group_id, members = group
+        for episode_name in self._params.episodes:
+            episode_results = 
+            epis
+            
+
+
         
         data = [
             load_data(config['output']['path'], config['output']['suffix'], cell) 
