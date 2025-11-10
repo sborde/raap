@@ -3,15 +3,13 @@
 import abc
 
 from collections import namedtuple
+from dataclasses import dataclass
 from typing import Self, Protocol
 
 import numpy as np
 import pandas as pd
 
 from scipy.ndimage import gaussian_filter1d
-
-SpikeTypeResults = namedtuple("SpikeTypeResults", ['spike_type', 'result'])
-
 
 class Histogram:
     """A class that represents a histogram."""
@@ -113,6 +111,14 @@ class HistogramCalculatorLike(Protocol):
     @abc.abstractmethod
     def __call__(self, data: np.ndarray) -> Histogram:
         """Calculate the histogram."""
+    @property
+    @abc.abstractmethod
+    def bin_range(self) -> tuple[float, float]:
+        """Get the range of the histogram bins."""
+    @property
+    @abc.abstractmethod
+    def data_unit(self) -> str:
+        """Get the data unit of the histogram."""
 
 
 class HistogramCalculator(HistogramCalculatorLike):
@@ -158,6 +164,11 @@ class HistogramCalculator(HistogramCalculatorLike):
         """Get the data unit of the histogram."""
         return self._data_unit
 
+    @property
+    def bin_range(self) -> tuple[float, float]:
+        """Get the range of the histogram bins."""
+        return self._range
+
     def __call__(self, data: np.ndarray) -> Histogram:
         """Calculate the histogram."""
         data *= self._data_multiplier
@@ -187,6 +198,11 @@ class HistogramCalculatorGaussSmoother:
         self._base_calculator = calculator
         self._sigma = sigma
 
+    @property
+    def bin_range(self) -> tuple[float, float]:
+        """Get the range of the histogram bins."""
+        return self._base_calculator.bin_range
+
     def __call__(self, data: np.ndarray) -> Histogram:
         """Calculate and smooth the histogram."""
         raw_histogram = self._base_calculator(data)
@@ -197,6 +213,16 @@ class HistogramCalculatorGaussSmoother:
             raw_histogram.data_unit,
             raw_histogram.value_unit
         )
+
+
+SpikeTypeResults = namedtuple("SpikeTypeResults", ['spike_type', 'result'])
+
+
+@dataclass
+class EventAnalysisResult:
+    """A class that represents the result of event analysis for a spike type."""
+    histogram: MultiTrialHistogram
+    trial_events: list[np.ndarray]
 
 
 def calculate_ptth(
@@ -220,12 +246,21 @@ def calculate_ptth_for_events(
     triggers: np.ndarray,
     events: pd.DataFrame,
     calculator: HistogramCalculatorLike,
-) -> MultiTrialHistogram:
+) -> EventAnalysisResult:
     """
     Calculate the peritrigger time-histogram for a set of triggers and events.
     It's an adapter for the `calculate_ptth` function.
     """
-    return calculate_ptth(triggers, events['timestamp'].to_numpy(), calculator)
+    histogram = calculate_ptth(triggers, events['timestamp'].to_numpy(), calculator)
+    data_multiplier = 1000 if calculator.data_unit == 'ms' else 1
+    triggered_events = [
+        data_multiplier * (events['timestamp'].to_numpy() - trigger) for trigger in triggers
+    ]
+    trial_events = [
+        te[(te >= calculator.bin_range[0]) & (te <= calculator.bin_range[1])]
+        for te in triggered_events
+    ]
+    return EventAnalysisResult(histogram=histogram, trial_events=trial_events)
 
 def calculate_ptth_by_spike_type(
     triggers: np.ndarray,

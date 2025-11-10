@@ -10,7 +10,7 @@ from triggered_firing.exporters import create_result_saver
 from triggered_firing.io_utils import RecordingSpikePair, load_input_data
 
 from .plot_utils import create_figure_saver, create_ptth_plotter, create_spike_palette_for_celltype
-from .calculators import HistogramCalculator, MultiTrialHistogram, SpikeTypeResults, calculate_ptth_for_spike_types
+from .calculators import EventAnalysisResult, HistogramCalculator, MultiTrialHistogram, SpikeTypeResults, calculate_ptth_for_spike_types
 
 class IndividualSpikeTypePTTHAnalysis:
 
@@ -56,7 +56,6 @@ class IndividualSpikeTypePTTHAnalysis:
             self._spike_types,
             self._calculate
         )
-
         cell_result = CellWrapper(input_file.info, results)
         spike_palette = self._get_palette(input_file.info.cell_type)
 
@@ -64,8 +63,8 @@ class IndividualSpikeTypePTTHAnalysis:
             results,
             self._trigger_condition
         )
-        n_trials = results[0].result.n_trials
-        valid_trials = result_to_plot[0].result.n_trials
+        n_trials = results[0].result.histogram.n_trials
+        valid_trials = result_to_plot[0].result.histogram.n_trials
 
         cell_figure = self._plot(CellWrapper(input_file.info, result_to_plot), spike_palette)
         plt.title(
@@ -85,24 +84,27 @@ def remove_zero_trials(
     if trigger_condition is None:
         return triggered_histograms
 
-    n_triggers = triggered_histograms[0].result.n_trials
+    n_triggers = triggered_histograms[0].result.histogram.n_trials
     keep_flags = np.ones(n_triggers, dtype=bool)
     for type_result in triggered_histograms:
         spike_type = type_result.spike_type
         if spike_type not in trigger_condition:
             continue
-        histogram = type_result.result
+        histogram = type_result.result.histogram
         keep_flags &= np.sum(histogram.values, axis=0) > 0
 
     return [
         SpikeTypeResults(
             spike_type=spike_type,
-            result=MultiTrialHistogram(
-                values=histogram.values[:, keep_flags],
-                centers=histogram.centers,
-                data_unit=histogram.data_unit,
-                value_unit=histogram.value_unit
+            result=EventAnalysisResult(
+                histogram=MultiTrialHistogram(
+                    values=result.histogram.values[:, keep_flags],
+                    centers=result.histogram.centers,
+                    data_unit=result.histogram.data_unit,
+                    value_unit=result.histogram.value_unit
+                ),
+                trial_events=result.trial_events.copy()
             )
         )
-        for spike_type, histogram in triggered_histograms
+        for spike_type, result in triggered_histograms
     ]

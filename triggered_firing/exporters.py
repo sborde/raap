@@ -12,7 +12,7 @@ def convert_spike_result_to_df(
     result: SpikeTypeResults
 ) -> pd.DataFrame:
     """Convert SpikeTypeResults to a DataFrame."""
-    histogram = result.result
+    histogram = result.result.histogram
     result_dict = {
         'centers': histogram.centers,
         'spike_type': result.spike_type

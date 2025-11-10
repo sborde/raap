@@ -2,11 +2,11 @@
 data:
   # Path to the raw data where files are grouped into subdirectories.
   raw_data:
-    path: C:\Datasets\raap\InVivoJuxta
+    path: C:\Datasets\raap\invivo
     extension: mat
   # Path to the processed_data directory with the same structure as raw_data.
-  processed_data:
-    path: C:\tmp\Bozso2025\PutRAAP\Results\TriggeredFiringComparison\01_processed_data
+  results:
+    path: C:\tmp\Bozso2025\PutRAAP\Results\New\SpikeFeatures
     extension: csv
     suffix:
 # Input selection: what to process from the data folders?
@@ -38,7 +38,6 @@ input:
   mode: directory
   select_dirs:
     - RSI_L2-3
-    - FSI_L2-3
   skip_files:
 # Output directory where the figures and statistics directories will be created
 # It will follow the same structure as the input folders.
@@ -46,8 +45,8 @@ output:
   path: C:\tmp\Bozso2025\PutRAAP\Results\TriggeredFiringComparison\02_results
 # Path to the grouping Excel sheet
 grouping:
-  do: True
-  path: C:\tmp\Bozso2025\PutRAAP\Results\TriggeredFiringComparison\grouping_001.xlsx
+  do: False
+  path: C:\tmp\Bozso2025\PutRAAP\Results\New\data_invivo.xlsx
 # Parameters for the analysis.
 params:
   # Name of the trigger
@@ -76,6 +75,7 @@ params:
 plot:
   # Thickness of the line representing the histogram
   line_width: 2
+  raster_tick_size: 2
   # How the color for a spike type is selected from palette?
   #  Possible values:
   #   cell_type: colored by the cell's type

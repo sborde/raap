@@ -48,26 +48,40 @@ def make_ptth_figure(
     cell_results: CellWrapper[list[SpikeTypeResults]],
     spike_palette: dict[str, str],
     trigger: str,
-    line_width: float
+    line_width: float,
+    raster_tick_size: float = 0.5
 ) -> CellWrapper[Figure]:
     """
     Create a Peri-Event Time Histogram (PETH) figure.
     """
-    info = cell_results.info
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, axes = plt.subplots(
+        2, 1, figsize=(10, 10),
+        sharex=True, constrained_layout=True
+    )
+    raster_ax = axes[0]
+    hist_ax = axes[1]
     for result in cell_results.data:
         spike_type = result.spike_type
-        histogram = result.result
-        ax.plot(
+        events = result.result.trial_events
+        histogram = result.result.histogram
+        spike_color = spike_palette[spike_type]
+        for i, trial_events in enumerate(events):
+            raster_ax.vlines(
+                trial_events,
+                i - raster_tick_size/2,
+                i + raster_tick_size/2,
+                color=spike_color
+            )
+        hist_ax.plot(
             histogram.centers,
             histogram.values.mean(axis=1),
             label=spike_type,
-            color=spike_palette[spike_type],
+            color=spike_color,
             linewidth=line_width
         )
-    ax.set_ylabel(make_ylabel(cell_results.data[0].result.value_unit))
-    ax.set_xlabel(f"Time relative to trigger ({cell_results.data[0].result.data_unit})")
-    ax.set_title(f"{info.name}{trigger}-triggered Histogram")
+    hist_ax.set_ylabel(make_ylabel(cell_results.data[0].result.histogram.value_unit))
+    hist_ax.set_xlabel(f"Time relative to trigger ({cell_results.data[0].result.histogram.data_unit})")
+    plt.suptitle(f"{cell_results.info.name} {trigger}-triggered Histogram")
     return CellWrapper(cell_results.info, fig)
 
 def save_figure(
@@ -109,7 +123,8 @@ def create_ptth_plotter(
             cell_results=cell_result,
             spike_palette=spike_palette,
             trigger=trigger,
-            line_width=params['line_width']
+            line_width=params['line_width'],
+            raster_tick_size=params.get('raster_tick_size', 0.5)
         )
         return cell_figure
     return plot
