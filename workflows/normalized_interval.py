@@ -15,7 +15,7 @@ from common.data_utils import CellWrapper
 from param_classes.workflows.normalized_interval_firing import (
     NormalizedIntervalFiringWorkflowParams
 )
-from triggered_firing.calculators import MultiTrialHistogram
+from triggered_firing.calculators import MultiTrialHistogram, select_spikes
 from workflows.normalized_inter_raap import Interval
 from workflows.run_util.io import ResultPaths
 from workflows.result_classes import EventSequenceList, IntervalRelatedEvents, FiringAnalysisResults
@@ -247,10 +247,6 @@ def convert_episode_result_to_frame(
         df.insert(0, 'spike_type', spike_type)
         frames.append(df)
     return pd.concat(frames, ignore_index=True)
-
-def select_spikes(spikes: DataFrame, type_name: str) -> np.ndarray:
-    """Select spikes of the given type."""
-    return spikes[spikes['spike_type'] == type_name]['timestamp'].to_numpy()
 
 def normalize_to_interval(
     spikes: np.ndarray,

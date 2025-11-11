@@ -8,8 +8,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from collections import namedtuple
-
 from tqdm import tqdm
 from scipy.stats import wilcoxon
 from pandas import DataFrame
@@ -17,11 +15,10 @@ from pandas import DataFrame
 from common.data_utils import CellWrapper
 from param_classes.workflows.peritrigger_analysis import PeriTriggerAnalysisWorkflowParams
 from triggered_firing.calculators import (
-    HistogramCalculator,
-    HistogramCalculatorGaussSmoother,
-    calculate_ptth_for_spike_types
+    SpikeTypeResults,
+    create_per_spike_type_calculator
 )
-from triggered_firing.exporters import convert_spike_result_to_df
+from triggered_firing.exporters import convert_results_to_df_per_type
 
 from workflows.run_util.io import ResultPaths
 
@@ -36,13 +33,23 @@ class CellPTTHAggregate:
 def run_analysis(
     input_files: list[CellWrapper[ResultPaths]],
     params: PeriTriggerAnalysisWorkflowParams
-) -> list[CellWrapper[DataFrame]]:
+) -> list[CellWrapper[list[SpikeTypeResults]]]:
     """Run the peri-trigger analysis workflow on the given input files."""
     analysis = IndividualSpikeTypePTTHAnalysis(params)
     return [analysis(input_file) for input_file in input_files]
 
-def run_aggregation(
-    input_files: list[CellWrapper[DataFrame]],
+def run_cellwise_aggregation(
+    cell_results: list[CellWrapper[list[SpikeTypeResults]]],
+    group_name: str,
+    params: PeriTriggerAnalysisWorkflowParams
+) -> tuple[str, DataFrame]:
+    """Run the cell-wise aggregation workflow on the given input files."""
+    aggregator = CellwisePTTHAggregator(params)
+    aggregation = aggregator(cell_results, group_name)
+    return (group_name, aggregation)
+
+def run_detection(
+    input_files: list[CellWrapper[list[SpikeTypeResults]]],
     group_name: str,
     params: PeriTriggerAnalysisWorkflowParams
 ) -> tuple[str, CellPTTHAggregate]:
@@ -73,53 +80,233 @@ class IndividualSpikeTypePTTHAnalysis:
     """Class to perform peri-trigger time histogram analysis for individual spike types."""
     def __init__(self, params: PeriTriggerAnalysisWorkflowParams):
         self._trigger_name = params.analysis.trigger
-        self._spike_types = params.analysis.spike_types
-
-        hist_params = params.analysis.histogram
-        self._calculate_histograms = HistogramCalculator(
-            hist_params.bin_range,
-            hist_params.bin_size,
-            hist_params.value_unit,
-            hist_params.data_unit
-        )
-        if params.analysis.smooth_size > 0:
-            self._calculate_histograms = HistogramCalculatorGaussSmoother(
-                self._calculate_histograms,
-                params.analysis.smooth_size
-            )
-
-        self._suffix = f'{self._trigger_name}_{hist_params.value_unit}'
+        self._calculate = create_per_spike_type_calculator(params.analysis)
+        self._suffix = (
+            f'{params.analysis.trigger}' +
+            f'_{params.analysis.histogram.value_unit}')
         self._result_dir = Path(params.output.path) / '01_results' / 'individual'
         self._result_dir.mkdir(parents=True, exist_ok=True)
 
-    def _save_result(self, result: CellWrapper[DataFrame]):
+    def __call__(self, input_file: CellWrapper[ResultPaths]) -> CellWrapper[list[SpikeTypeResults]]:
+        """Process a single input file and return the results."""
+        input_data = input_file.data.load()
+        spikes = input_data.spikes
+        triggers = input_data.get_markers(self._trigger_name)
+        histograms = self._calculate(spikes, triggers)
+        cell_result = CellWrapper(input_file.info, histograms)
+        self._save_result(cell_result)
+        return cell_result
+
+    def _save_result(self, result: CellWrapper[list[SpikeTypeResults]]):
         """Saves the result DataFrame to an Excel file."""
         result_path = self._result_dir / result.cell_type
         result_path.mkdir(parents=True, exist_ok=True)
-        result.data.to_excel(
+        result_frame = convert_results_to_df_per_type(result.data)
+        result_frame.to_excel(
             result_path / f'{result.name}_{self._suffix}_histogram.xlsx',
             index=False
         )
 
-    def _calculate(self, spikes: DataFrame, triggers: np.ndarray) -> DataFrame:
-        """Calculate histograms for the given spikes and triggers."""
-        histograms = calculate_ptth_for_spike_types(
-            spikes, triggers, self._spike_types, self._calculate_histograms
-        )
-        return pd.concat([
-            convert_spike_result_to_df(result) for result
-            in histograms
-        ])
 
-    def __call__(self, input_file: CellWrapper[ResultPaths]) -> CellWrapper[DataFrame]:
-        """Process a single input file and return the results."""
-        input_data = input_file.data.load()
-        trigger_markers = input_data.recording.get_event(self._trigger_name)
-        triggers = np.array([marker.timestamp.time for marker in trigger_markers])
-        results = self._calculate(input_data.spikes, triggers)
-        cell_result = CellWrapper(input_file.info, results)
-        self._save_result(cell_result)
-        return cell_result
+class CellwisePTTHAggregator:
+    """Class to aggregate peri-trigger time histogram results within a single cell."""
+
+    def __init__(self, params: PeriTriggerAnalysisWorkflowParams):
+        self._palette = params.palette
+        self._show_raster = params.analysis.show_raster
+        self._raster_size = params.analysis.raster_size
+        self._raster_band_color = params.analysis.raster_band_color
+        self._spike_types = params.analysis.spike_types
+        self._trigger_condition = params.grouping.trigger_condition
+        self._xlim = params.analysis.histogram.bin_range
+        self._ylim = params.analysis.ylim
+        self._suffix = (
+            f'{params.analysis.trigger}' +
+            f'_{params.analysis.histogram.value_unit}' +
+            '_mean'
+        )
+        base_path = Path(params.output.path)
+        self._paths = {
+            'results': base_path / '01_results' / 'grouped',
+            'cellwise_figures': base_path / '02_figures' / 'individual',
+            'groupwise_figures': base_path / '02_figures' / 'groupwise'
+        }
+        for path in self._paths.values():
+            path.mkdir(parents=True, exist_ok=True)
+
+    def __call__(
+        self,
+        input_files: list[CellWrapper[list[SpikeTypeResults]]],
+        group_name: str
+    ) -> DataFrame:
+        """Aggregate results from multiple input files."""
+        aggregation = self._aggregate_per_cell(input_files)
+
+        self._save_result(aggregation, group_name)
+        for cell_result in input_files:
+            self._plot_per_cell(cell_result, group_name)
+        return aggregation
+
+    def _aggregate_per_cell(self, cells: list[CellWrapper[list[SpikeTypeResults]]]) -> DataFrame:
+        """Aggregate values within a single cell."""
+        cell_frames = [
+            CellWrapper(
+                cell_result.info,
+                convert_results_to_df_per_type(cell_result.data)
+            ) for cell_result in cells
+        ]
+        values = {}
+        for cell_frame in cell_frames:
+            cell_values = self._get_values(cell_frame.data)
+            cellwise_mean = np.mean(cell_values, axis=1)
+            values[cell_frame.name] = cellwise_mean
+        return DataFrame(
+            {
+                'spike_type': cell_frames[0].data['spike_type'],
+                'centers': cell_frames[0].data['centers'],
+                **values
+            }
+        )
+
+    def _get_values(self, frame: DataFrame) -> np.ndarray:
+        """Filter the DataFrame based on the trigger condition."""
+        all_values = frame.iloc[:, 2:].to_numpy()
+        if not self._trigger_condition:
+            return all_values
+        spike_type_vector = frame['spike_type']
+        flag = np.ones(all_values.shape[1], dtype=bool)
+        for condition in self._trigger_condition:
+            flag &= (
+                np.sum(all_values[spike_type_vector == condition, :], axis=0) > 0
+            )
+        return all_values[:, flag]
+
+    def _aggregate_per_group(self, cells: DataFrame) -> DataFrame:
+        """Aggregate values"""
+        values = cells.iloc[:, 2:].to_numpy()
+        mean_values = np.mean(values, axis=1)
+        sd_values = np.std(values, axis=1)
+        sem_values = sd_values / np.sqrt(values.shape[1])
+        return DataFrame({
+            'spike_types': cells['spike_type'],
+            'centers': cells['centers'],
+            'mean': mean_values,
+            'sem': sem_values
+        })
+
+    def _save_result(self, data: DataFrame, name: str):
+        """Saves the aggregated result DataFrame to an Excel file."""
+        data.to_excel(
+            self._paths['results'] / f'{name}_{self._suffix}_histograms.xlsx',
+            index=False
+        )
+
+    def _plot_per_cell(
+        self,
+        cell_result: CellWrapper[list[SpikeTypeResults]],
+        group_name: str
+    ):
+        """Plot the detected maximum points for each cell."""
+        group_fig_dir = self._paths['cellwise_figures'] / group_name
+        group_fig_dir.mkdir(parents=True, exist_ok=True)
+
+        spike_colors = {
+            'AIS-AP': self._palette['cell_type'][group_name],
+            'RA-AP': self._palette['spike_type']['RA-AP']
+        }
+
+        if self._show_raster:
+            fig, axes = plt.subplots(
+                2, 1, figsize=(10, 10),
+                constrained_layout=True,
+                sharex=True
+            )
+            raster_ax = axes[0]
+            for spike_result in cell_result.data:
+                if spike_result.spike_type != 'RA-AP':
+                    continue
+                for i, events in enumerate(spike_result.result.trial_events):
+                    if len(events) == 0:
+                        continue
+                    raster_ax.fill_between(
+                        self._xlim,
+                        [i - self._raster_size / 2, i - self._raster_size / 2],
+                        [i + self._raster_size / 2, i + self._raster_size / 2],
+                        color=self._raster_band_color,
+                        alpha=0.1,
+                        edgecolor='none'
+                    )
+            for spike_result in cell_result.data:
+                color = spike_colors[spike_result.spike_type]
+                for i, events in enumerate(spike_result.result.trial_events):
+                    raster_ax.vlines(
+                        events,
+                        ymin=i - self._raster_size / 2,
+                        ymax=i + self._raster_size / 2,
+                        color=color
+                    )
+                raster_ax.set_ylim((
+                    -self._raster_size/2,
+                    self._raster_size/2 + len(spike_result.result.trial_events)
+                ))
+            raster_ax.set_yticks([])
+            hist_ax = axes[1]
+        else:
+            fig, hist_ax = plt.subplots(1, 1, figsize=(10, 5))
+
+        histograms = convert_results_to_df_per_type(cell_result.data)
+        selected_values = self._get_values(histograms)
+        for spike_type in self._spike_types:
+
+            if spike_type == 'AIS-AP':
+                color = self._palette['cell_type'][group_name]
+            else:
+                color = self._palette['spike_type']['RA-AP']
+
+            flag = histograms['spike_type'] == spike_type
+            centers = histograms.loc[flag, 'centers']
+
+            values = selected_values[flag, :]
+            mean_values = np.mean(values, axis=1)
+            sd_values = np.std(values, axis=1)
+            sem_values = sd_values / np.sqrt(values.shape[1])
+
+            hist_ax.fill_between(
+                centers,
+                mean_values - sem_values,
+                mean_values + sem_values,
+                color=spike_colors[spike_type],
+                alpha=0.3
+            )
+            hist_ax.plot(
+                centers,
+                mean_values,
+                '-',
+                color=spike_colors[spike_type],
+                label=spike_type
+            )
+
+        hist_ax.set_ylim(self._ylim)
+        hist_ax.set_xlabel('Time (ms)')
+        hist_ax.set_title(
+            f'n={selected_values.shape[1]}/{histograms.shape[1] - 2}'
+        )
+        hist_ax.set_xlim(self._xlim)
+        hist_ax.legend()
+        plt.suptitle(cell_result.name)
+
+        figure_name = f'{cell_result.name}_{self._suffix}_histogram'
+        fig.savefig(
+            group_fig_dir / f'{figure_name}.png',
+            dpi=100,
+            format='png'
+        )
+        with plt.rc_context({'svg.fonttype': 'none'}):
+            fig.savefig(
+                group_fig_dir / f'{figure_name}.svg',
+                format='svg'
+            )
+        plt.close(fig)
 
 
 class CellwisePTTHLatencyDetection:
@@ -143,52 +330,47 @@ class CellwisePTTHLatencyDetection:
         for path in self._paths.values():
             path.mkdir(parents=True, exist_ok=True)
 
-    def _save_result(self, result: CellWrapper[DataFrame]):
-        """Saves the aggregated result DataFrame to an Excel file."""
-        result.data.to_excel(
-            self._paths['results'] / f'{result.name}_{self._suffix}_histogram.xlsx',
+    def __call__(
+        self,
+        input_files: list[CellWrapper[list[SpikeTypeResults]]],
+        group_name: str
+    ) -> CellPTTHAggregate:
+        """Aggregate results from multiple input files."""
+        aggregation = self._aggregate_per_cell(input_files)
+        max_points = self._find_max_points(aggregation)
+        aggregation.to_excel(
+            self._paths['results'] / f'{group_name}_{self._suffix}_histograms.xlsx',
+            index=False
+        )
+        max_points.to_excel(
+            self._paths['results'] / f'{group_name}_{self._suffix}_max_points.xlsx',
             index=False
         )
 
-    def _get_values(self, frame: DataFrame) -> np.ndarray:
-        """Filter the DataFrame based on the trigger condition."""
-        all_values = frame.iloc[:, 2:].to_numpy()
-        if not self._trigger_condition:
-            return all_values
-        spike_type_vector = frame['spike_type']
-        flag = np.ones(all_values.shape[1], dtype=bool)
-        for condition in self._trigger_condition:
-            flag &= (
-                np.sum(all_values[spike_type_vector == condition, :], axis=0) > 0
-            )
-        return all_values[:, flag]
+        self._plot_cellwise_detection(aggregation, max_points, group_name)
+        self._plot_grouped_detection(aggregation, max_points, group_name)
+        return CellPTTHAggregate(aggregation, max_points)
 
-    def _cellwise_aggregate(self, cells: list[CellWrapper[DataFrame]]) -> DataFrame:
+    def _aggregate_per_cell(self, cells: list[CellWrapper[list[SpikeTypeResults]]]) -> DataFrame:
         """Aggregate values within a single cell."""
+        cell_frames = [
+            CellWrapper(
+                cell_result.info,
+                convert_results_to_df_per_type(cell_result.data)
+            ) for cell_result in cells
+        ]
         values = {}
-        for cell in cells:
-            cell_values = self._get_values(cell.data)
-            values[cell.name] = np.mean(cell_values, axis=1)
-        return pd.DataFrame(
+        for cell_frame in cell_frames:
+            cell_values = self._get_values(cell_frame.data)
+            cellwise_mean = np.mean(cell_values, axis=1)
+            values[cell_frame.name] = cellwise_mean
+        return DataFrame(
             {
-                'spike_type': cells[0].data['spike_type'],
-                'centers': cells[0].data['centers'],
+                'spike_type': cell_frames[0].data['spike_type'],
+                'centers': cell_frames[0].data['centers'],
                 **values
             }
         )
-
-    def _groupwise_aggregate(self, cells: DataFrame) -> DataFrame:
-        """Aggregate values"""
-        values = cells.iloc[:, 2:].to_numpy()
-        mean_values = np.mean(values, axis=1)
-        sd_values = np.std(values, axis=1)
-        sem_values = sd_values / np.sqrt(values.shape[1])
-        return DataFrame({
-            'spike_types': cells['spike_type'],
-            'centers': cells['centers'],
-            'mean': mean_values,
-            'sem': sem_values
-        })
 
     def _find_max_points(self, frame: DataFrame) -> DataFrame:
         """Find the maximum time value in the DataFrame."""
@@ -213,6 +395,39 @@ class CellwisePTTHLatencyDetection:
                 })
         return DataFrame(points)
 
+    def _save_result(self, result: CellWrapper[DataFrame]):
+        """Saves the aggregated result DataFrame to an Excel file."""
+        result.data.to_excel(
+            self._paths['results'] / f'{result.name}_{self._suffix}_histogram.xlsx',
+            index=False
+        )
+
+    def _get_values(self, frame: DataFrame) -> np.ndarray:
+        """Filter the DataFrame based on the trigger condition."""
+        all_values = frame.iloc[:, 2:].to_numpy()
+        if not self._trigger_condition:
+            return all_values
+        spike_type_vector = frame['spike_type']
+        flag = np.ones(all_values.shape[1], dtype=bool)
+        for condition in self._trigger_condition:
+            flag &= (
+                np.sum(all_values[spike_type_vector == condition, :], axis=0) > 0
+            )
+        return all_values[:, flag]
+
+    def _groupwise_aggregate(self, cells: DataFrame) -> DataFrame:
+        """Aggregate values"""
+        values = cells.iloc[:, 2:].to_numpy()
+        mean_values = np.mean(values, axis=1)
+        sd_values = np.std(values, axis=1)
+        sem_values = sd_values / np.sqrt(values.shape[1])
+        return DataFrame({
+            'spike_types': cells['spike_type'],
+            'centers': cells['centers'],
+            'mean': mean_values,
+            'sem': sem_values
+        })
+
     def _plot_cellwise_detection(
         self,
         histograms: DataFrame,
@@ -228,7 +443,7 @@ class CellwisePTTHLatencyDetection:
             fig, ax = plt.subplots(1, 1, figsize=(10, 5))
             cell_data = histograms[['spike_type', 'centers', cell_name]]
             cell_points = points[points['cell'] == cell_name]
-            for i, spike_type in enumerate(self._spike_types):
+            for spike_type in self._spike_types:
                 spike_data = cell_data[cell_data['spike_type'] == spike_type]
                 spike_points = cell_points[cell_points['spike_type'] == spike_type]
 
@@ -331,25 +546,6 @@ class CellwisePTTHLatencyDetection:
                 format='svg'
             )
         plt.close(fig)
-
-    def __call__(
-        self, input_files: list[CellWrapper[DataFrame]], group_name: str
-    ) -> CellPTTHAggregate:
-        """Aggregate results from multiple input files."""
-        aggregation = self._cellwise_aggregate(input_files)
-        max_points = self._find_max_points(aggregation)
-        aggregation.to_excel(
-            self._paths['results'] / f'{group_name}_{self._suffix}_histograms.xlsx',
-            index=False
-        )
-        max_points.to_excel(
-            self._paths['results'] / f'{group_name}_{self._suffix}_max_points.xlsx',
-            index=False
-        )
-
-        self._plot_cellwise_detection(aggregation, max_points, group_name)
-        self._plot_grouped_detection(aggregation, max_points, group_name)
-        return CellPTTHAggregate(aggregation, max_points)
 
 
 class PairedTester:

@@ -4,12 +4,19 @@ import abc
 
 from collections import namedtuple
 from dataclasses import dataclass
+import functools
 from typing import Self, Protocol
 
 import numpy as np
 import pandas as pd
 
+from pandas import DataFrame
+
 from scipy.ndimage import gaussian_filter1d
+
+from param_classes.workflows.peritrigger_analysis import (
+    PeriTriggerAnalysisParams
+)
 
 class Histogram:
     """A class that represents a histogram."""
@@ -44,6 +51,19 @@ class Histogram:
     def value_unit(self) -> str:
         """Get the value unit of the histogram."""
         return self._value_unit
+
+    def with_values(
+        self,
+        values: np.ndarray,
+        value_unit: str = ''
+    ) -> Self:
+        """Create a new Histogram with the given values."""
+        return type(self)(
+            centers=self._centers,
+            values=values,
+            data_unit=self._data_unit,
+            value_unit=(value_unit or self._value_unit)
+        )
 
 
 class MultiTrialHistogram:
@@ -99,11 +119,12 @@ class MultiTrialHistogram:
     @classmethod
     def from_list(cls, data: list[Histogram]) -> Self:
         """Create a MultiTrialHistogram from a list of dictionaries."""
-        centers = data[0].centers
-        values = np.stack([item.values for item in data], axis=1)
-        centers_unit = data[0].data_unit
-        value_unit = data[0].value_unit
-        return cls(centers, values, centers_unit, value_unit)
+        return cls(
+            data[0].centers,
+            np.stack([item.values for item in data], axis=1),
+            data[0].data_unit,
+            data[0].value_unit
+        )
 
 
 class HistogramCalculatorLike(Protocol):
@@ -119,6 +140,10 @@ class HistogramCalculatorLike(Protocol):
     @abc.abstractmethod
     def data_unit(self) -> str:
         """Get the data unit of the histogram."""
+    @property
+    @abc.abstractmethod
+    def data_multiplier(self) -> float:
+        """Get the data multiplier."""
 
 
 class HistogramCalculator(HistogramCalculatorLike):
@@ -148,7 +173,6 @@ class HistogramCalculator(HistogramCalculatorLike):
         )
         self._data_multiplier = 1000 if data_unit == 'ms' else 1
 
-
     @property
     def centers(self) -> np.ndarray:
         """Get the centers of the histogram bins."""
@@ -168,6 +192,11 @@ class HistogramCalculator(HistogramCalculatorLike):
     def bin_range(self) -> tuple[float, float]:
         """Get the range of the histogram bins."""
         return self._range
+
+    @property
+    def data_multiplier(self) -> float:
+        """Get the data multiplier."""
+        return self._data_multiplier
 
     def __call__(self, data: np.ndarray) -> Histogram:
         """Calculate the histogram."""
@@ -195,24 +224,34 @@ class HistogramCalculatorGaussSmoother:
     def __init__(
         self, calculator: HistogramCalculatorLike, sigma: float
     ):
-        self._base_calculator = calculator
+        self._calculate = calculator
         self._sigma = sigma
+        self._smooth = functools.partial(
+            gaussian_filter1d,
+            sigma=sigma,
+            axis=0
+        )
 
     @property
     def bin_range(self) -> tuple[float, float]:
         """Get the range of the histogram bins."""
-        return self._base_calculator.bin_range
+        return self._calculate.bin_range
+
+    @property
+    def data_unit(self) -> str:
+        """Get the data unit of the histogram."""
+        return self._calculate.data_unit
+
+    @property
+    def data_multiplier(self) -> float:
+        """Get the data multiplier."""
+        return self._calculate.data_multiplier
 
     def __call__(self, data: np.ndarray) -> Histogram:
         """Calculate and smooth the histogram."""
-        raw_histogram = self._base_calculator(data)
-        smoothed_values = gaussian_filter1d(raw_histogram.values, self._sigma, axis=0)
-        return Histogram(
-            raw_histogram.centers,
-            smoothed_values,
-            raw_histogram.data_unit,
-            raw_histogram.value_unit
-        )
+        raw_histogram = self._calculate(data)
+        smoothed_values = self._smooth(raw_histogram.values)
+        return raw_histogram.with_values(smoothed_values)
 
 
 SpikeTypeResults = namedtuple("SpikeTypeResults", ['spike_type', 'result'])
@@ -224,64 +263,25 @@ class EventAnalysisResult:
     histogram: MultiTrialHistogram
     trial_events: list[np.ndarray]
 
-
-def calculate_ptth(
-    triggers: np.ndarray,
-    events: np.ndarray,
-    calculator: HistogramCalculatorLike,
-) -> MultiTrialHistogram:
-    """
-    Calculate the peritrigger time-histogram for a set of triggers and events.
-    """
-    histograms = [calculator(events - trigger) for trigger in triggers]
-    histogram_values = [hist.values for hist in histograms]
-    return MultiTrialHistogram(
-        centers=histograms[0].centers,
-        values=np.stack(histogram_values, axis=1),
-        data_unit=histograms[0].data_unit,
-        value_unit=histograms[0].value_unit
-    )
-
 def calculate_ptth_for_events(
     triggers: np.ndarray,
-    events: pd.DataFrame,
+    events: np.ndarray,
     calculator: HistogramCalculatorLike,
 ) -> EventAnalysisResult:
     """
     Calculate the peritrigger time-histogram for a set of triggers and events.
-    It's an adapter for the `calculate_ptth` function.
     """
-    histogram = calculate_ptth(triggers, events['timestamp'].to_numpy(), calculator)
-    data_multiplier = 1000 if calculator.data_unit == 'ms' else 1
-    triggered_events = [
-        data_multiplier * (events['timestamp'].to_numpy() - trigger) for trigger in triggers
-    ]
+    triggered_events = [(events - trigger) for trigger in triggers]
     trial_events = [
-        te[(te >= calculator.bin_range[0]) & (te <= calculator.bin_range[1])]
+        te[
+            (te >= (calculator.bin_range[0] / calculator.data_multiplier)) &
+            (te <= (calculator.bin_range[1] / calculator.data_multiplier))
+        ]
         for te in triggered_events
     ]
+    histograms = [calculator(trial_event) for trial_event in trial_events]
+    histogram = MultiTrialHistogram.from_list(histograms)
     return EventAnalysisResult(histogram=histogram, trial_events=trial_events)
-
-def calculate_ptth_by_spike_type(
-    triggers: np.ndarray,
-    spikes: pd.DataFrame,
-    calculator: HistogramCalculator,
-    params: dict
-) -> list[SpikeTypeResults]:
-    """
-    Calculate triggered histograms around each trigger.
-    """
-
-    return [
-        SpikeTypeResults(
-            spike_type=spike_type,
-            result=calculate_ptth_for_events(
-                triggers,
-                spikes[spikes['spike_type'] == spike_type],
-                calculator
-            )
-        ) for spike_type in params['spike_types']
-    ]
 
 def calculate_ptth_for_spike_types(
     spikes: pd.DataFrame,
@@ -295,8 +295,35 @@ def calculate_ptth_for_spike_types(
             spike_type=spike_type,
             result=calculate_ptth_for_events(
                 triggers,
-                spikes[spikes['spike_type'] == spike_type],
+                select_spikes(spikes, spike_type),
                 calculator
             )
         ) for spike_type in spike_types
     ]
+
+def create_per_spike_type_calculator(
+    params: PeriTriggerAnalysisParams
+) -> functools.partial:
+    """Create a partial function to calculate per-spike-type histograms."""
+
+    calculator = HistogramCalculator(
+        params.histogram.bin_range,
+        params.histogram.bin_size,
+        params.histogram.value_unit,
+        params.histogram.data_unit
+    )
+    if params.smooth_size > 0:
+        calculator = HistogramCalculatorGaussSmoother(
+            calculator, params.smooth_size
+        )
+
+    return functools.partial(
+        calculate_ptth_for_spike_types,
+        spike_types=params.spike_types,
+        calculator=calculator
+    )
+
+def select_spikes(spikes: DataFrame, type_name: str) -> np.ndarray:
+    """Select spikes of the given type."""
+    return spikes[spikes['spike_type'] == type_name]['timestamp'].to_numpy()
+

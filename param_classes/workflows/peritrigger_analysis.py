@@ -51,6 +51,9 @@ class PeriTriggerAnalysisParams(BaseModel):
     spike_types: list[str] = []
     histogram: HistogramParams = HistogramParams()
     smooth_size: float = 0.0
+    show_raster: bool = True
+    raster_size: float = 1.0
+    raster_band_color: str = '#ababab'
     ylim: tuple[float, float] = (0.0, 0.0)
 
 

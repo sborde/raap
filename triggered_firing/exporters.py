@@ -8,6 +8,14 @@ from common.data_utils import CellWrapper
 
 from .calculators import SpikeTypeResults
 
+def convert_results_to_df_per_type(
+    results: list[SpikeTypeResults]
+) -> pd.DataFrame:
+    """Convert a list of SpikeTypeResults to a single DataFrame."""
+    return pd.concat([
+        convert_spike_result_to_df(result) for result in results
+    ])
+
 def convert_spike_result_to_df(
     result: SpikeTypeResults
 ) -> pd.DataFrame:
