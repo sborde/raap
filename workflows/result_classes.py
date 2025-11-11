@@ -1,11 +1,9 @@
 """This module contains classes that contains analysis results."""
 
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
-from common.data_utils import CellInfo
 from triggered_firing.calculators import MultiTrialHistogram
 from workflows.normalized_inter_raap import Interval
 
@@ -31,4 +29,3 @@ class AnalysisResult[T]:
     """Class that contains analysis results for a single cell."""
     result: T
     attributes: dict
-

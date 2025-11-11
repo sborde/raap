@@ -2,13 +2,13 @@
 
 import abc
 
-from typing import Callable, Protocol
+from typing import Callable, Optional, Protocol
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from param_classes.workflows.episode_analysis import GroupingInputParams, InputDataParams
+from param_classes.workflows.episode_analysis import InputDataParams
 from param_classes.workflows.input_output import CellwiseResultsPathParams
 from signalizer.model.experiment.recordings import MatRecording
 
@@ -34,6 +34,7 @@ class ResultPaths:
         self.processed = processed
 
     def load(self) -> RecordingWithSpikes:
+        """Loads the raw and processed data into a RecordingWithSpikes object."""
         return RecordingWithSpikes(
             MatRecording(self.raw),
             pd.read_csv(self.processed.as_posix(), index_col=None)
@@ -212,32 +213,32 @@ def create_file_checker(config: dict) -> FileChecker:
         return lambda path: is_selected_file(path, config['select_files'])
     raise ValueError("Invalid configuration mode")
 
-def is_skipped_file(path: Path, names: list[str] = []) -> bool:
+def is_skipped_file(path: Path, names: Optional[list[str]] = None) -> bool:
     """
     Check if a file should be skipped based on its name and the provided
     exclusion lists.
     """
-    return path.name in names
+    return path.name in (names or [])
 
-def is_selected_file(path: Path, names: list[str] = []) -> bool:
+def is_selected_file(path: Path, names: Optional[list[str]] = None) -> bool:
     """
     Check if the given file is in the selected files list.
     """
-    return path.name in names
+    return path.name in (names or [])
 
-def is_in_skipped_dir(path: Path, names: list[str] = []) -> bool:
+def is_in_skipped_dir(path: Path, names: Optional[list[str]] = None) -> bool:
     """
     Check if the containing directory of the given file should be skipped based
     on its path and the provided exclusion lists.
     """
-    return path.parent.name in names
+    return path.parent.name in (names or [])
 
-def is_in_selected_dir(path: Path, names: list[str] = []) -> bool:
+def is_in_selected_dir(path: Path, names: Optional[list[str]] = None) -> bool:
     """
     Check if the containing directory of the given file is in the selected
     directories list.
     """
-    return path.parent.name in names
+    return path.parent.name in (names or [])
 
 def get_processed_path(info: CellInfo, config: dict) -> Path:
     """

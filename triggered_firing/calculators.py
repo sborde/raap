@@ -326,4 +326,3 @@ def create_per_spike_type_calculator(
 def select_spikes(spikes: DataFrame, type_name: str) -> np.ndarray:
     """Select spikes of the given type."""
     return spikes[spikes['spike_type'] == type_name]['timestamp'].to_numpy()
-

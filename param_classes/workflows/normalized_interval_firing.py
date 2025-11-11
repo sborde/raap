@@ -1,6 +1,5 @@
 """This module contains parameter classes for normalized interval firing workflows."""
 
-from typing import Optional
 from pydantic import BaseModel
 
 from param_classes.workflows.input_output import GroupInfoParams, InputDataParams, OutputParams
@@ -42,6 +41,10 @@ class NormalizedIntervaFiringAnalysisParams(BaseModel):
     smooth_size: float = 0.0
     episode_name: str = ''
     spike_types: list[str] = []
+    interval_condition: list[str] = []
+    show_raster: bool = True
+    raster_size: float = 0.5
+    raster_band_color: str = '#ababab'
     ylim: tuple[float, float] = (0.0, 0.0)
 
 class NormalizedIntervalFiringWorkflowParams(BaseModel):

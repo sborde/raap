@@ -9,7 +9,7 @@ import numpy as np
 
 from pandas import DataFrame
 
-from analyses.model import RecordingWithSpikes
+from analyses.model import RecordingWithSpikes, Interval
 from common.data_utils import CellWrapper
 from param_classes.workflows.normalized_inter_raap import (
     InterRaapSpikeCountFiringWorkflowParams,
@@ -49,23 +49,6 @@ class IntervalLike(Protocol):
     @abc.abstractmethod
     def end(self) -> float:
         """Get the end of the interval."""
-
-
-@dataclass
-class Interval:
-    """Class representing a time interval."""
-    start: float
-    end: float
-
-    @property
-    def duration(self) -> float:
-        """Get the duration of the interval."""
-        return self.end - self.start
-
-    def contained(self, events: np.ndarray) -> np.ndarray:
-        """Get the events contained within the interval."""
-        return events[(events >= self.start) & (events <= self.end)]
-
 
 @dataclass
 class IntervalRelatedEvents:

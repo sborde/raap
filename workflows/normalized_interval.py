@@ -8,25 +8,23 @@ import pandas as pd
 import numpy as np
 
 from pandas import DataFrame
-from matplotlib.figure import Figure
 
-from analyses.model import RecordingWithSpikes
+from analyses.model import RecordingWithSpikes, Interval
 from common.data_utils import CellWrapper
 from param_classes.workflows.normalized_interval_firing import (
     NormalizedIntervalFiringWorkflowParams
 )
 from triggered_firing.calculators import MultiTrialHistogram, select_spikes
-from workflows.normalized_inter_raap import Interval
+
 from workflows.run_util.io import ResultPaths
 from workflows.result_classes import EventSequenceList, IntervalRelatedEvents, FiringAnalysisResults
 
 SpikeTypeGroupedResults = dict[str, FiringAnalysisResults]
-EpisodeRelatedResults = dict[str, SpikeTypeGroupedResults]
 
 def run_analysis(
     input_files: list[CellWrapper[ResultPaths]],
     params: NormalizedIntervalFiringWorkflowParams
-) -> list[CellWrapper[EpisodeRelatedResults]]:
+) -> list[CellWrapper[SpikeTypeGroupedResults]]:
     """Run the normalized inter RA-AP firing workflow on the given input files."""
     analysis = NormalizedIntervalFiringWorkflow(params)
     return [analysis(input_file) for input_file in input_files]
@@ -56,6 +54,7 @@ class NormalizedIntervalFiringWorkflow:
         self._bin_size = params.bin_size
         self._value_unit = params.values
         self._ylim = params.ylim
+        self._xlim = params.bin_range
 
         self._make_histogram = functools.partial(
             MultiTrialHistogram,
@@ -64,9 +63,16 @@ class NormalizedIntervalFiringWorkflow:
             value_unit=self._value_unit
         )
         self._extend_interval = functools.partial(
-            extend_interval,
-            normalized=self._cut_window
+            Interval.shift_relative,
+            left=self._cut_window.start,
+            right=self._cut_window.end - 1.0
         )
+
+        self._condition = params.interval_condition
+
+        self._show_raster = params.show_raster
+        self._raster_size = params.raster_size
+        self._raster_band_color = params.raster_band_color
 
         self._paths = None
         if config.output.path:
@@ -81,13 +87,11 @@ class NormalizedIntervalFiringWorkflow:
 
     def __call__(
         self, cell: CellWrapper[ResultPaths]
-    ) -> CellWrapper[EpisodeRelatedResults]:
+    ) -> CellWrapper[SpikeTypeGroupedResults]:
         """Process a single input file and return the results."""
-        results = {
-            self._episode_name: self._calculate_in_episode(
-                cell.data.load(), self._episode_name
-            )
-        }
+        results = self._calculate_in_episode(
+            cell.data.load(), self._episode_name
+        )
         cell_result = CellWrapper(cell.info, results)
         self._plot(cell_result)
         self._save_result(cell_result)
@@ -97,19 +101,17 @@ class NormalizedIntervalFiringWorkflow:
         self, cell_data: RecordingWithSpikes, episode_name: str
     ) -> SpikeTypeGroupedResults:
         """Calculate normalized inter RA-AP interval firing for a single episode."""
-        starts, ends = cell_data.get_episode_ends(episode_name)
-        intervals = [Interval(start, end) for start, end in zip(starts, ends)]
-        results = {}
-        for spike_type in self._spike_types:
-            results[spike_type] = self._calculate_on_subset(
+        intervals = cell_data.get_episode_intervals(episode_name)
+        return {
+            spike_type: self._calculate_on_subset(
                 select_spikes(cell_data.spikes, spike_type), intervals
-            )
-        return results
+            ) for spike_type in self._spike_types
+        }
 
     def _calculate_on_subset(
         self, spikes: np.ndarray, intervals: list[Interval]
     ) -> FiringAnalysisResults:
-        """Calculate normalized inter RA-AP interval firing on a subset of spikes."""
+        """Calculate firing rate in the given sequence of intervals."""
         values = []
         events = []
         for interval in intervals:
@@ -126,8 +128,8 @@ class NormalizedIntervalFiringWorkflow:
     ) -> IntervalRelatedEvents:
         """Collect normalized spike times within the given interval."""
         cutting_interval = self._extend_interval(interval)
-        spikes_within = cutting_interval.contained(spikes)
-        normalized_spikes = normalize_to_interval(spikes_within, interval)
+        spikes_in_interval = cutting_interval.contained(spikes)
+        normalized_spikes = interval.normalize_by(spikes_in_interval)
         return IntervalRelatedEvents(interval, normalized_spikes)
 
     def _count_in_interval(
@@ -144,120 +146,147 @@ class NormalizedIntervalFiringWorkflow:
         return counts
 
     def _plot(
-        self, cell_result: CellWrapper[EpisodeRelatedResults]
+        self, cell_result: CellWrapper[SpikeTypeGroupedResults]
     ):
         """Plot the results."""
-        cell_name = cell_result.info.name
-        cell_color = self._palette['cell_type'][cell_result.info.cell_type]
 
-        for episode_name, episode_results in cell_result.data.items():
-            fig, axes  = plt.subplots(2, 1, figsize=(8, 6), sharex=True)
+        spike_colors = {
+            'AIS-AP': self._palette['cell_type'][cell_result.info.cell_type],
+            'RA-AP': self._palette['spike_type']['RA-AP']
+        }
+
+        if self._show_raster:
+            fig, axes = plt.subplots(
+                2, 1, figsize=(8, 6),
+                constrained_layout=True,
+                sharex=True
+            )
+
+            raster_offset = self._raster_size / 2
             raster_ax = axes[0]
             hist_ax = axes[1]
-            for spike_type, result in episode_results.items():
-                if spike_type == 'RA-AP':
-                    color = self._palette['spike_type'][spike_type]
-                else:
-                    color = cell_color
 
+            for i, events in enumerate(cell_result.data['RA-AP'].sequences.sequences):
+                if len(events) == 0:
+                    continue
+                raster_ax.fill_between(
+                    self._xlim,
+                    [i - raster_offset, i - raster_offset],
+                    [i + raster_offset, i + raster_offset],
+                    color=self._raster_band_color,
+                    alpha=0.1,
+                    edgecolor='none'
+                )
+
+            for spike_type, result in cell_result.data.items():
+                spike_color = spike_colors[spike_type]
                 for i, events in enumerate(result.sequences.sequences):
                     raster_ax.vlines(
                         events,
-                        i-0.25,
-                        i+0.25,
-                        color=color
+                        i - raster_offset,
+                        i + raster_offset,
+                        color=spike_color
                     )
+            raster_ax.set_ylim((
+                -raster_offset,
+                raster_offset + len(cell_result.data['RA-AP'].sequences.sequences)
+            ))
+            raster_ax.set_yticks([])
+            raster_ax.set_ylabel('')
+        else:
+            fig, hist_ax = plt.subplots(1, 1, figsize=(8, 3))
 
-                hist: MultiTrialHistogram = result.histograms
-                centers = hist.centers
-                mean_values = np.mean(hist.values, axis=1)
-                sd_values = np.std(hist.values, axis=1)
-                sem_values = sd_values / np.sqrt(hist.values.shape[1])
-                hist_ax.fill_between(
-                    centers,
-                    mean_values - sem_values,
-                    mean_values + sem_values,
-                    color=color,
-                    alpha=0.3
-                )
-                hist_ax.plot(
-                    centers,
-                    mean_values,
-                    '-',
-                    color=color,
-                    label=spike_type
-                )
+        n_all_trials = list(cell_result.data.items())[0][1].histograms.n_trials
+        valid_trial_flag = np.ones(n_all_trials, dtype=bool)
+        for condition_spike_type in self._condition:
+            spike_type_result = cell_result.data[condition_spike_type]
+            for i, sequence in enumerate(spike_type_result.sequences.sequences):
+                if np.sum((0 <= sequence) & (sequence <= 1)) == 0:
+                    valid_trial_flag[i] = False
 
-            raster_ax.set_ylabel(f"#{episode_name.capitalize()}")
-            hist_ax.set_ylim(self._ylim)
-            hist_ax.set_xlabel('Normalized time')
+        for spike_type, result in cell_result.data.items():
+            spike_color = spike_colors[spike_type]
 
-            if self._value_unit == 'count':
-                hist_ax.set_ylabel('Avg spike count')
-            elif self._value_unit == 'freq':
-                hist_ax.set_ylabel('Firing (Hz)')
-            elif self._value_unit == 'prob':
-                hist_ax.set_ylabel(f'Spike distribution')
-
-            plt.suptitle(
-                f'{cell_result.info.name} Normalized {episode_name} firing'
+            hist: MultiTrialHistogram = result.histograms
+            centers = hist.centers
+            values = hist.values[:, valid_trial_flag]
+            mean_values = np.mean(values, axis=1)
+            sd_values = np.std(values, axis=1)
+            sem_values = sd_values / np.sqrt(values.shape[1])
+            hist_ax.fill_between(
+                centers,
+                mean_values - sem_values,
+                mean_values + sem_values,
+                color=spike_color,
+                alpha=0.3
             )
-            if self._paths:
-                fig_path = (
-                    self._paths['figures'] /
-                    f'{cell_name}_normalized_{episode_name}_firing'
-                )
-                fig.savefig(
-                    f'{fig_path}.png', format='png', dpi=300
-                )
-                with plt.rc_context({'svg.fonttype': 'none'}):
-                    fig.savefig(
-                        f'{fig_path}.svg', format='svg'
-                    )
-                plt.close(fig)
-            else:
-                plt.show()
+            hist_ax.plot(
+                centers,
+                mean_values,
+                '-',
+                color=spike_color,
+                label=spike_type
+            )
 
-    def _save_result(self, cell_result: CellWrapper[EpisodeRelatedResults]):
+        if self._value_unit == 'count':
+            hist_ax.set_ylabel('Avg spike count')
+        elif self._value_unit == 'freq':
+            hist_ax.set_ylabel('Firing (Hz)')
+        elif self._value_unit == 'prob':
+            hist_ax.set_ylabel('Spike distribution')
+        hist_ax.set_ylim(self._ylim)
+
+        hist_ax.set_xlabel('Normalized time')
+        hist_ax.set_xlim(self._xlim)
+
+        hist_ax.legend()
+
+        hist_ax.set_title(
+            f'n={np.sum(valid_trial_flag)}/{n_all_trials}'
+        )
+        plt.suptitle(
+            f'{cell_result.info.name} Normalized {self._episode_name} firing'
+        )
+        if self._paths:
+            fig_path = (
+                self._paths['figures'] /
+                f'{cell_result.info.name}_normalized_{self._episode_name}_firing'
+            )
+            fig.savefig(
+                f'{fig_path}.png', format='png', dpi=300
+            )
+            with plt.rc_context({'svg.fonttype': 'none'}):
+                fig.savefig(
+                    f'{fig_path}.svg', format='svg'
+                )
+            plt.close(fig)
+        else:
+            plt.show()
+
+    def _save_result(self, cell_result: CellWrapper[SpikeTypeGroupedResults]):
         """Save the results to file."""
         if not self._paths:
             return
-
-        cell_name = cell_result.info.name
-        for episode_name, episode_result in cell_result.data.items():
-            result_path = (
-                self._paths['results'] /
-                f'{cell_name}_normalized_{episode_name}_firing.xlsx'
-            )
-            pool_frame = convert_episode_result_to_frame(
-                episode_result, episode_name
-            )
-            pool_frame.to_excel(result_path, index=False)
+        result_path = (
+            self._paths['results'] /
+            f'{cell_result.info.name}_normalized_{self._episode_name}_firing.xlsx'
+        )
+        pool_frame = convert_episode_result_to_frame(cell_result.data)
+        pool_frame.to_excel(result_path, index=False)
 
 def convert_episode_result_to_frame(
-    results: SpikeTypeGroupedResults,
-    episode_name: str
+    results: SpikeTypeGroupedResults
 ) -> pd.DataFrame:
+    """Convert the episode result to a DataFrame."""
     frames = []
     for spike_type, result in results.items():
         hist: MultiTrialHistogram = result.histograms
-        df = DataFrame({'centers': hist.centers})
-        for i in range(hist.values.shape[1]):
-            df[f'{episode_name}_{i+1}'] = hist.values[:, i]
+        column_names = [f'interval_{i+1}' for i in range(hist.n_trials)]
+        df = pd.DataFrame(
+            hist.values,
+            columns=column_names
+        )
+        df.insert(0, 'centers', hist.centers)
         df.insert(0, 'spike_type', spike_type)
         frames.append(df)
     return pd.concat(frames, ignore_index=True)
-
-def normalize_to_interval(
-    spikes: np.ndarray,
-    interval: Interval
-) -> np.ndarray:
-    """Normalize spike times by the given interval."""
-    return (spikes - interval.start) / interval.duration
-
-def extend_interval(interval: Interval, normalized: Interval) -> Interval:
-    """Extend the interval based on normalized ends."""
-    return Interval(
-        interval.start + normalized.start * interval.duration,
-        interval.start + normalized.end * interval.duration
-    )

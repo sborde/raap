@@ -1,11 +1,41 @@
+"""A module for classes that hold data for analysis."""
 
-from typing import Sequence
+from dataclasses import dataclass
+from typing import Self, Sequence
 import numpy as np
 from pandas import DataFrame
 
 from signalizer.model.experiment.recordings import MatRecording
 
 IntervalEnds = tuple[np.ndarray, np.ndarray]
+
+
+@dataclass
+class Interval:
+    """Class representing a time interval."""
+    start: float
+    end: float
+
+    @property
+    def duration(self) -> float:
+        """Get the duration of the interval."""
+        return self.end - self.start
+
+    def shift_relative(self, left: float = 0, right: float = 0) -> Self:
+        """Extend the interval by relative amounts."""
+        return type(self)(
+            self.start + left * self.duration,
+            self.end + right * self.duration
+        )
+
+    def normalize_by(self, spikes: np.ndarray) -> np.ndarray:
+        """Normalize spike times by the given interval."""
+        return (spikes - self.start) / self.duration
+
+    def contained(self, events: np.ndarray) -> np.ndarray:
+        """Get the events contained within the interval."""
+        return events[(events >= self.start) & (events <= self.end)]
+
 
 class RecordingWithSpikes:
     """This class stores a raw recording and its associated spike data."""
@@ -16,6 +46,7 @@ class RecordingWithSpikes:
 
     @property
     def n_spikes(self) -> int:
+        """Returns the number of spikes in the recording."""
         return self.spikes.shape[0]
 
     def mark_episode_events(
@@ -44,6 +75,11 @@ class RecordingWithSpikes:
             starts.append(episode.start)
             ends.append(episode.end)
         return (np.array(starts), np.array(ends))
+
+    def get_episode_intervals(self, name: str) -> list[Interval]:
+        """Returns a list of Interval objects for all episodes with the given name."""
+        starts, ends = self.get_episode_ends(name)
+        return [Interval(start, end) for start, end in zip(starts, ends)]
 
     def get_oscillation_cycles(
         self,
