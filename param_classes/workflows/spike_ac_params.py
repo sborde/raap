@@ -15,6 +15,8 @@ class SpikeACAnalysisParams(BaseModel):
     smooth_size: float = 0.0
     episodes: list[str] = []
     spike_types: list[str] = []
+    show_raster: bool = False
+    raster_size: float = 0.5
     ylim: Optional[tuple[float, float]] = None
 
 class SpikeACAnalysisParamsWorkflowParams(BaseModel):

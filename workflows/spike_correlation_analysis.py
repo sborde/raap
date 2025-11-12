@@ -19,7 +19,7 @@ from triggered_firing.calculators import (
 from workflows.normalized_inter_raap import Interval
 from workflows.normalized_interval import select_spikes
 from workflows.run_util.io import ResultPaths
-from workflows.spike_ac_analysis import collect_episode_intervals, save_figure, select_during_episode
+from workflows.spike_ac_analysis import save_figure, select_during_episode
 
 
 def run_analysis(
@@ -93,7 +93,7 @@ class SpikeCorrelationAnalysis:
             try:
                 results[episode_name] = self._calculate_episode_correlations(
                     cell_data.spikes,
-                    collect_episode_intervals(cell_data, episode_name)
+                    cell_data.get_episode_intervals(episode_name)
                 )
             except KeyError:
                 continue
