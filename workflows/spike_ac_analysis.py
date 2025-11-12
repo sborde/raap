@@ -77,6 +77,7 @@ class SpikeACAnalysis:
             value_unit=self._value_unit
         )
 
+        self._to_svg = params.to_svg
         self._palette = config.palette
         self._show_raster = params.show_raster
         self._raster_size = params.raster_size
@@ -196,10 +197,9 @@ class SpikeACAnalysis:
                         sequences=firing_result.sequences.sequences,
                         ax=axes[0],
                         color=spike_colors[spike_type],
-                        marker_size=self._raster_size,
+                        marker_ratio=self._raster_size,
                         xlim=self._xlim
                     )
-                    axes[0].set_xticks([])
                     axes[0].set_xlabel('')
                 else:
                     fig, hist_ax  = plt.subplots(1, 1, figsize=(8, 3))
@@ -224,7 +224,8 @@ class SpikeACAnalysis:
                     save_figure(
                         self._paths['figures'],
                         fig,
-                        f'{cell_name}_{episode_name}_{spike_type}_ac'
+                        f'{cell_name}_{episode_name}_{spike_type}_ac',
+                        self._to_svg
                     )
                 else:
                     plt.show()
@@ -255,10 +256,12 @@ def make_raster_plot(
     sequences: list[np.ndarray],
     ax: Axes,
     color: str,
-    marker_size: float,
+    marker_ratio: float,
     xlim: tuple[float, float]
 ):
     """Create a raster plot figure."""
+    n_triggers = len(sequences)
+    marker_size = marker_ratio * n_triggers
     raster_offset = marker_size / 2
     for i, events in enumerate(sequences):
         ax.vlines(
@@ -304,9 +307,10 @@ def select_during_episode(
     subsequences = [interval.contained(spikes) for interval in intervals]
     return np.concatenate(subsequences, axis=0)
 
-def save_figure(path: Path, fig: Figure, name: str):
+def save_figure(path: Path, fig: Figure, name: str, to_svg: bool = False):
     """Save the given figure to the specified path in PNG and SVG formats."""
     fig.savefig(f'{path}/{name}.png', format='png', dpi=300, bbox_inches='tight')
-    # with plt.rc_context({'svg.fonttype': 'none'}):
-    #     fig.savefig(f'{path}/{name}.svg', format='svg', bbox_inches='tight')
+    if to_svg:
+        with plt.rc_context({'svg.fonttype': 'none'}):
+            fig.savefig(f'{path}/{name}.svg', format='svg', bbox_inches='tight')
     plt.close(fig)
