@@ -1,7 +1,9 @@
 """A module for classes that hold data for analysis."""
 
+import abc
+
 from dataclasses import dataclass
-from typing import Self, Sequence
+from typing import Self, Sequence, Protocol
 import numpy as np
 from pandas import DataFrame
 
@@ -35,6 +37,19 @@ class Interval:
     def contained(self, events: np.ndarray) -> np.ndarray:
         """Get the events contained within the interval."""
         return events[(events >= self.start) & (events <= self.end)]
+
+
+class IntervalLike(Protocol):
+    """Protocol for interval-like objects."""
+    @property
+    @abc.abstractmethod
+    def start(self) -> float:
+        """Get the start of the interval."""
+
+    @property
+    @abc.abstractmethod
+    def end(self) -> float:
+        """Get the end of the interval."""
 
 
 class RecordingWithSpikes:

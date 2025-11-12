@@ -9,7 +9,11 @@ import numpy as np
 
 from pandas import DataFrame
 
-from analyses.model import RecordingWithSpikes, Interval
+from analyses.model import (
+    RecordingWithSpikes,
+    Interval,
+    IntervalLike
+)
 from common.data_utils import CellWrapper
 from param_classes.workflows.normalized_inter_raap import (
     InterRaapSpikeCountFiringWorkflowParams,
@@ -37,18 +41,6 @@ def run_inter_raap_spike_count_analysis(
     for cell in input_files:
         analysis(cell)
 
-
-class IntervalLike(Protocol):
-    """Protocol for interval-like objects."""
-    @property
-    @abc.abstractmethod
-    def start(self) -> float:
-        """Get the start of the interval."""
-
-    @property
-    @abc.abstractmethod
-    def end(self) -> float:
-        """Get the end of the interval."""
 
 @dataclass
 class IntervalRelatedEvents:
