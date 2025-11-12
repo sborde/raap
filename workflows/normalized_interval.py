@@ -161,9 +161,8 @@ class NormalizedIntervalFiringWorkflow:
     ):
         """Plot the results."""
 
-        spike_colors = {
-            'AIS-AP': self._palette['cell_type'][cell_result.info.cell_type],
-            'RA-AP': self._palette['spike_type']['RA-AP']
+        spike_colors = self._palette['spike_type'] | {
+            'AIS-AP': self._palette['cell_type'][cell_result.info.cell_type]
         }
 
         if self._show_raster:
@@ -384,9 +383,8 @@ class NormalizedIntervalGroupAggregatorWorkflow:
     ):
         """Plots the group average histogram per spike-type and the detected points."""
 
-        spike_colors = {
-            'AIS-AP': self._palette['cell_type'][group_name],
-            'RA-AP': self._palette['spike_type']['RA-AP']
+        spike_colors = self._palette['spike_type'] | {
+            'AIS-AP': self._palette['cell_type'][group_name]
         }
 
         fig, ax = plt.subplots(

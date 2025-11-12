@@ -210,9 +210,8 @@ class CellwisePTTHAggregator:
         group_fig_dir = self._paths['cellwise_figures'] / group_name
         group_fig_dir.mkdir(parents=True, exist_ok=True)
 
-        spike_colors = {
-            'AIS-AP': self._palette['cell_type'][group_name],
-            'RA-AP': self._palette['spike_type']['RA-AP']
+        spike_colors = self._palette['spike_type'] | {
+            'AIS-AP': self._palette['cell_type'][group_name]
         }
 
         if self._show_raster:
