@@ -9,6 +9,8 @@ import numpy as np
 
 from pandas import DataFrame
 
+from scipy.ndimage import gaussian_filter1d
+
 from analyses.model import RecordingWithSpikes, Interval
 from common.data_utils import CellWrapper
 from param_classes.workflows.normalized_interval_firing import (
@@ -50,7 +52,15 @@ class NormalizedIntervalFiringWorkflow:
         params = config.analysis
         self._episode_name = params.episode_name
         self._spike_types = params.spike_types
-        self._smooth_size = params.smooth_size
+
+        self._smooth = None
+        if params.smooth_size > 0.0:
+            self._smooth = functools.partial(
+                gaussian_filter1d,
+                sigma=params.smooth_size,
+                axis=0
+            )
+
         self._cut_window = Interval(
             params.bin_range[0], params.bin_range[1]
         )
@@ -66,6 +76,11 @@ class NormalizedIntervalFiringWorkflow:
         self._value_unit = params.values
         self._ylim = params.ylim
         self._xlim = params.bin_range
+
+        self._calculate_histogram = functools.partial(
+            np.histogram,
+            bins=self._bins
+        )
 
         self._make_histogram = functools.partial(
             MultiTrialHistogram,
@@ -147,13 +162,19 @@ class NormalizedIntervalFiringWorkflow:
         self, spikes_within: IntervalRelatedEvents
     ) -> np.ndarray:
         """Count the number of spikes within the given interval."""
-        counts = np.histogram(spikes_within.sequence, bins=self._bins)[0]
+        counts, _ = self._calculate_histogram(spikes_within.sequence)
+
         if self._value_unit == 'freq':
-            return counts / (spikes_within.interval.duration * self._bin_size)
-        if self._value_unit == 'prob':
+            counts = counts / (spikes_within.interval.duration * self._bin_size)
+        elif self._value_unit == 'prob':
             total_spikes = len(spikes_within.sequence)
             if total_spikes > 0:
-                return counts / total_spikes
+                counts = counts / total_spikes
+
+        counts = counts.astype(float)
+        if self._smooth is not None:
+            counts = self._smooth(counts)
+
         return counts
 
     def _plot(
