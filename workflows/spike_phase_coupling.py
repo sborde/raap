@@ -175,6 +175,9 @@ class SpikePhaseCouplingWorkflow:
                 counts = counts / total_spikes
 
         counts = counts.astype(float)
+        if self._smooth is not None:
+            counts = self._smooth(counts)
+
         return counts
 
     def _mark_valid_trials(
@@ -311,9 +314,6 @@ class SpikePhaseCouplingWorkflow:
             std_values = np.std(values, axis=1)
             sem_values = std_values / np.sqrt(values.shape[1])
 
-            if self._smooth is not None:
-                mean_values = self._smooth(mean_values)
-                sem_values = self._smooth(sem_values)
 
             hist_ax.fill_between(
                 centers,
