@@ -1,6 +1,16 @@
+"""A module for performing full wavelet transform on signals."""
+
+import h5py
+
+from dataclasses import dataclass
+from typing import Optional, Self
+
 import numpy as np
 from numpy.fft import fft, ifft
 import matplotlib.pyplot as plt
+
+from param_classes.workflows.wavelet_analysis import WaveletParams
+from signalizer.model.experiment.signals import Signal
 
 WAVELET_PARAM = {
     'low': 1.0,
@@ -11,6 +21,71 @@ WAVELET_PARAM = {
     'addtaper': False,
     'taperlength': 0.1
 }
+
+@dataclass
+class Spectrogram:
+    """A class representing a spectrogram."""
+    times: np.ndarray
+    freqs: np.ndarray
+    power: np.ndarray
+    fs: int
+
+    @property
+    def si(self) -> float:
+        """Sampling interval of the spectrogram."""
+        return 1.0 / self.fs
+
+    def cut_around(
+        self,
+        trigger: float,
+        window: tuple[float, float]
+    ) -> Optional[Self]:
+        """Cut the spectrogram around a trigger time within a specified window."""
+        trigger_i = (trigger - self.times[0]) // self.si
+        start_i = int(trigger_i + (window[0] // self.si))
+        end_i = int(trigger_i + (window[1] // self.si))
+
+        if start_i < 0 or end_i > len(self.times):
+            return None
+
+        return type(self)(
+            self.times[start_i:end_i] - trigger,
+            self.freqs,
+            self.power[:, start_i:end_i],
+            self.fs
+        )
+
+def save_spectrogram_hdf(
+    spectrogram: Spectrogram,
+    name: str,
+    path: str
+):
+    """Save the whole spectrogram to an HDF file."""
+    with h5py.File(
+        f'{path}/{name}_spectrogram.h5', 'w'
+    ) as f:
+        f.create_dataset(
+            'times',
+            data=spectrogram.times,
+            compression="gzip",
+            compression_opts=9
+        )
+        f.create_dataset(
+            'freqs',
+            data=spectrogram.freqs,
+            compression="gzip",
+            compression_opts=9
+        )
+        f.create_dataset(
+            'power',
+            data=spectrogram.power,
+            compression="gzip",
+            compression_opts=9
+        )
+        f.create_dataset(
+            'fs',
+            data=spectrogram.fs
+        )
 
 def calculate_tfd_power(
     v: np.ndarray,
@@ -70,6 +145,14 @@ def convolve_with_fft(v: np.ndarray, response: np.ndarray) -> np.ndarray:
 
     return conv_fft
 
+def calculate_spectrogram(
+    signal: Signal,
+    params: WaveletParams
+) -> Spectrogram:
+    """Calculate the spectrogram of a signal using wavelet transform."""
+    power = calculate_tfd_power(signal.values, signal.si, params.model_dump())
+    freqs = np.arange(params.low, params.high + params.step, params.step)
+    return Spectrogram(signal.times, freqs, power, signal.fs)
 
 def create_morlet_wavelet(
     frequency: float,

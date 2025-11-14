@@ -3,10 +3,11 @@
 import abc
 
 from dataclasses import dataclass
-from typing import Self, Sequence, Protocol
+from typing import Optional, Self, Sequence, Protocol
 import numpy as np
 from pandas import DataFrame
 
+from signalizer.model.experiment.signals import Signal
 from signalizer.model.experiment.recordings import MatRecording
 
 IntervalEnds = tuple[np.ndarray, np.ndarray]
@@ -73,6 +74,27 @@ class RecordingWithSpikes:
         if name == 'all':
             return np.ones(self.n_spikes, dtype=bool)
         return mark_events_in_interval(self.spikes, self.get_episode_ends(name))
+
+    def get_spikes(self, spike_type: Optional[str]) -> np.ndarray:
+        """
+        Get the spike times as a numpy array.
+        """
+        if spike_type is None:
+            return self.spikes['timestamp'].to_numpy()
+        return select_spikes(self.spikes, spike_type)
+
+    def get_signal(
+        self,
+        name: str,
+        fs: Optional[int] = None
+    ) -> Signal:
+        """
+        Get the signal from the recording by name, optionally resampled to fs.
+        """
+        signal = self.recording.get_waveform(name)
+        if fs is not None:
+            signal = signal.resampled(fs)
+        return signal
 
     def get_markers(self, name: str) -> np.ndarray:
         """
@@ -149,3 +171,8 @@ def get_events_in_intervals(events: DataFrame, intervals: IntervalEnds) -> DataF
     """
     mask = mark_events_in_interval(events, intervals)
     return events[mask]
+
+def select_spikes(spikes: DataFrame, spike_type: str) -> np.ndarray:
+    """Select spikes of the given type."""
+    flag = spikes['spike_type'] == spike_type
+    return spikes[flag]['timestamp'].to_numpy()

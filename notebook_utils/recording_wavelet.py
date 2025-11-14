@@ -1,7 +1,6 @@
 """A module for utility function of the recording wavelet analysis."""
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
@@ -9,20 +8,8 @@ from matplotlib.figure import Figure
 from signalizer.model.experiment.signals import Signal
 from signalizer.model.experiment.recordings import MatRecording
 
-from perform_full_wavelet import calculate_tfd_power
+from perform_full_wavelet import calculate_tfd_power, Spectrogram
 
-
-class Spectrogram:
-    """A class representing a spectrogram."""
-    def __init__(
-        self,
-        times: np.ndarray,
-        freqs: np.ndarray,
-        power: np.ndarray
-    ):
-        self.times = times
-        self.freqs = freqs
-        self.power = power
 
 
 def get_signal(recording: MatRecording, params: dict) -> Signal:
@@ -40,7 +27,8 @@ def calculate_spectrogram(signal: Signal, params: dict) -> Spectrogram:
     return Spectrogram(
         signal.times,
         freqs,
-        power
+        power,
+        signal.fs
     )
 
 def plot_spectrogram(
@@ -81,4 +69,3 @@ def plot_spectrogram(
     ax.set_ylabel('Frequency (Hz)')
 
     ax.set_title('Time-Frequency Distribution (Spectrogram)')
-
