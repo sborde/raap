@@ -73,15 +73,15 @@ def get_cell_info_list(input_config: dict) -> list[CellInfo]:
         raise FileNotFoundError(f"Table file {table_path} does not exist.")
 
     table = pd.read_excel(table_path, index_col=0)
-    rules = input_config.get('select_rules', [])
-    flag = np.zeros(len(table), dtype=bool)
-    for rule in rules:
-        rule_flag = np.ones(len(table), dtype=bool)
-        for column, value in rule.items():
-            rule_flag &= (table[column] == value)
-        flag |= rule_flag
-
-    table = table[flag]
+    if 'select_rules' in input_config:
+        rules = input_config.get('select_rules', [])
+        flag = np.zeros(len(table), dtype=bool)
+        for rule in rules:
+            rule_flag = np.ones(len(table), dtype=bool)
+            for column, value in rule.items():
+                rule_flag &= (table[column] == value)
+            flag |= rule_flag
+        table = table[flag]
     entries = [
         CellInfo(row['name'], row.get('group', ''))
         for _, row in table.iterrows()
