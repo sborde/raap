@@ -37,6 +37,20 @@ class SpikeTriggeredWaveletAnalysisParams(BaseModel):
     to_svg: bool = False
     dpi: int = 300
 
+class WindowedWaveletAnalysisParams(BaseModel):
+    """Parameter class for the normalized interval firing analysis."""
+    spike_types: list[str] = []
+    window_size: float = 1.0
+    step_size: float = 0.1
+    signal: SignalParameters = SignalParameters()
+    wavelet: WaveletParams = WaveletParams()
+    clim: tuple[float, float] = (0.0, 0.0)
+    xlim: tuple[float, float] = (0.0, 0.0)
+    ylim: tuple[float, float] = (0.0, 0.0)
+    to_png: bool = False
+    to_svg: bool = False
+    dpi: int = 300
+
 class SpikeTriggeredWaveletWorkflowParams(BaseModel):
     """Parameter class for the normalized inter RA-AP firing workflow."""
     data: InputDataParams = InputDataParams()
@@ -45,3 +59,12 @@ class SpikeTriggeredWaveletWorkflowParams(BaseModel):
     output: OutputParams = OutputParams()
     analysis: SpikeTriggeredWaveletAnalysisParams = SpikeTriggeredWaveletAnalysisParams()
     grouping: GroupInfoParams = GroupInfoParams()
+
+class WorkflowParams[T](BaseModel):
+    """Parameter class for the normalized inter RA-AP firing workflow."""
+    data: InputDataParams = InputDataParams()
+    input: dict = {}
+    palette: dict = {}
+    output: OutputParams = OutputParams()
+    grouping: GroupInfoParams = GroupInfoParams()
+    analysis: T

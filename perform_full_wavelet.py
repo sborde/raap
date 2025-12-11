@@ -1,9 +1,11 @@
 """A module for performing full wavelet transform on signals."""
 
-import h5py
+import abc
 
 from dataclasses import dataclass
-from typing import Optional, Self
+from typing import Optional, Self, Protocol
+
+import h5py
 
 import numpy as np
 from numpy.fft import fft, ifft
@@ -22,6 +24,7 @@ WAVELET_PARAM = {
     'taperlength': 0.1
 }
 
+
 @dataclass
 class Spectrogram:
     """A class representing a spectrogram."""
@@ -31,9 +34,32 @@ class Spectrogram:
     fs: int
 
     @property
+    def n_samples(self) -> int:
+        """Number of time samples in the spectrogram."""
+        return len(self.times)
+
+    @property
     def si(self) -> float:
         """Sampling interval of the spectrogram."""
         return 1.0 / self.fs
+
+    def with_power(
+        self, power: np.ndarray
+    ) -> Self:
+        """Return a new Spectrogram with the same freq and times values"""
+        if len(self.times) != power.shape[1]:
+            raise ValueError(
+                "The power matrix must have the same number of " +
+                "columns as the time vector."
+            )
+        if len(self.freqs) != power.shape[0]:
+            raise ValueError(
+                "The power matrix must have the same number of " +
+                "rows as the frequency vector."
+            )
+        return type(self)(
+            self.times, self.freqs, power, self.fs
+        )
 
     def cut_around(
         self,
@@ -55,37 +81,42 @@ class Spectrogram:
             self.fs
         )
 
+
+class WaveletCalculator(Protocol):
+    """Protocol for callables that calculates wavelet spectrogram for a signal"""
+    @abc.abstractmethod
+    def __call__(self, signal: Signal) ->  Spectrogram:
+        """Return a wavelet power spectrogram calculated from the signal"""
+
+
 def save_spectrogram_hdf(
     spectrogram: Spectrogram,
     name: str,
     path: str
 ):
     """Save the whole spectrogram to an HDF file."""
-    with h5py.File(
-        f'{path}/{name}_spectrogram.h5', 'w'
-    ) as f:
-        f.create_dataset(
-            'times',
-            data=spectrogram.times,
-            compression="gzip",
-            compression_opts=9
-        )
-        f.create_dataset(
-            'freqs',
-            data=spectrogram.freqs,
-            compression="gzip",
-            compression_opts=9
-        )
-        f.create_dataset(
-            'power',
-            data=spectrogram.power,
-            compression="gzip",
-            compression_opts=9
-        )
-        f.create_dataset(
-            'fs',
-            data=spectrogram.fs
-        )
+    with h5py.File(f'{path}/{name}_spectrogram.h5', 'w') as f:
+        save_array_to_hdf(spectrogram.times, 'times', f)
+        save_array_to_hdf(spectrogram.freqs, 'freqs', f)
+        save_array_to_hdf(spectrogram.power, 'power', f)
+        save_scalar_to_hdf(spectrogram.fs, 'fs', f)
+
+def save_array_to_hdf(
+    values: np.ndarray, name: str, f: h5py.File
+):
+    """Save the vector to a new dataset in the given file"""
+    f.create_dataset(
+        name,
+        data=values,
+        compression="gzip",
+        compression_opts=9
+    )
+
+def save_scalar_to_hdf(
+    value: int | float, name: str, f: h5py.File
+):
+    """Save the given number to a new dataset in the given file"""
+    f.create_dataset(name, data=value)
 
 def calculate_tfd_power(
     v: np.ndarray,
@@ -153,6 +184,13 @@ def calculate_spectrogram(
     power = calculate_tfd_power(signal.values, signal.si, params.model_dump())
     freqs = np.arange(params.low, params.high + params.step, params.step)
     return Spectrogram(signal.times, freqs, power, signal.fs)
+
+def aggregate_spectrograms(
+    spectrograms: list[Spectrogram]
+) -> Spectrogram:
+    """Average multiple spectrograms into a single spectrogram."""
+    powers = np.stack([s.power for s in spectrograms], axis=0)
+    return spectrograms[0].with_power(np.mean(powers, axis=0))
 
 def create_morlet_wavelet(
     frequency: float,
