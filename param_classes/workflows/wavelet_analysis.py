@@ -44,7 +44,7 @@ class WindowedWaveletAnalysisParams(BaseModel):
     step_size: float = 0.1
     signal: SignalParameters = SignalParameters()
     wavelet: WaveletParams = WaveletParams()
-    clim: tuple[float, float] = (0.0, 0.0)
+    clim: tuple[float | None, float | None] = (0.0, 0.0)
     xlim: tuple[float, float] = (0.0, 0.0)
     ylim: tuple[float, float] = (0.0, 0.0)
     to_png: bool = False
