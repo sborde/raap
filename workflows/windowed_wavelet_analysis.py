@@ -85,6 +85,49 @@ def extract_spectrogram(
     """Calculate the spectrogram of a signal."""
     return calculate_wavelet(extract_signal(data))
 
+def segment_to_active_intervals(
+    spectrogram: Spectrogram,
+    spikes: DataFrame,
+    *,
+    window_size: float,
+    include_spike_types: list[str]
+) -> list[SpectrogramSpikesPair]:
+    """Calculate the normalized inter RA-AP interval firing histogram."""
+    intervals = []
+    for include_type in include_spike_types:
+        timestamps = spikes[spikes['spike_type'] == include_type]['timestamp'].to_numpy()
+        for ts in timestamps:
+            interval = [ts - window_size, ts + window_size]
+            if not intervals or intervals[-1][1] < interval[0]:
+                intervals.append(interval)
+                continue
+            else:
+                intervals[-1][1] = max(intervals[-1][1], interval[1])
+    segments = []
+    for i_start, i_end in intervals:
+        spike_subsequence = spikes[
+            (spikes['timestamp'] >= i_start) & (spikes['timestamp'] < i_end)
+        ].copy()
+        spike_subsequence['timestamp'] -= i_start
+        spectrogram_segment = spectrogram.cut_around(
+            trigger=i_start, window=(0.0, i_end - i_start)
+        )
+        if spectrogram_segment is not None:
+            segments.append(
+                SpectrogramSpikesPair(
+                    trigger=i_start,
+                    spectrogram=spectrogram_segment,
+                    spikes=spike_subsequence,
+                    spike_counts={
+                        name: len(spike_subsequence[spike_subsequence['spike_type'] == name])
+                        for name in spikes['spike_type'].unique()
+                    }
+                )
+            )
+    print(f"Number of active interval segments: {len(segments)}")
+    return segments
+
+
 def segment_to_windows_with_firing(
     spectrogram: Spectrogram,
     spikes: DataFrame,
@@ -107,7 +150,7 @@ def segment_to_windows_with_firing(
         if spectrogram_segment is not None:
             segments.append(
                 SpectrogramSpikesPair(
-                    trigger=window_start - step_size,
+                    trigger=window_start,
                     spectrogram=spectrogram_segment,
                     spikes=spike_subsequence,
                     spike_counts={
@@ -333,6 +376,25 @@ def extract_spectrogram_segments(
     spectrogram = get_spectrogram(recording)
     return cut_segments(spectrogram, recording.spikes)
 
+def calculate_baseline_spectrogram_multi_spiketype(
+    segments: list[SpectrogramSpikesPair],
+    exclude_types: list[str],
+) -> Spectrogram:
+    """
+    Calculate the baseline spectrogram from segments that doesn't contain
+    spikes of the specified types.
+    """
+    non_spiking_segments = []
+    for segment in segments:
+        for spike_type in exclude_types:
+            if segment.spike_counts.get(spike_type, 0) > 0:
+                break
+        else:
+            non_spiking_segments.append(segment.spectrogram)
+    print(f"Number of non-spiking segments (excluding {exclude_types}): {len(non_spiking_segments)}")
+    return aggregate_spectrograms(non_spiking_segments)
+
+
 def calculate_baseline_spectrogram(
     segments: list[SpectrogramSpikesPair],
     spike_type: str,
@@ -377,6 +439,11 @@ def normalize_spectrogram_by_baseline(
         baseline_power = np.mean(baseline.power, axis=1).reshape(-1, 1)
     elif mode == 'median':
         baseline_power = np.median(baseline.power, axis=1).reshape(-1, 1)
+    elif mode == 'zscore':
+        baseline_mean = np.mean(baseline.power, axis=1).reshape(-1, 1)
+        baseline_std = np.std(baseline.power, axis=1).reshape(-1, 1)
+        normalized_power = (spectrogram.power - baseline_mean) / baseline_std
+        return spectrogram.with_power(normalized_power)
     else:
         raise ValueError(f"Unknown normalization mode: {mode}")
     normalized_power = spectrogram.power / baseline_power
