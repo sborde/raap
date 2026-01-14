@@ -85,6 +85,57 @@ def extract_spectrogram(
     """Calculate the spectrogram of a signal."""
     return calculate_wavelet(extract_signal(data))
 
+def collect_spike_triggered_spectrograms(
+    spectrogram: Spectrogram,
+    spikes: DataFrame,
+    *,
+    window_size: float,
+    spike_type: str,
+    exclude_spike_types: list[str] = []
+) -> list[SpectrogramSpikesPair]:
+    """
+    Collect spike triggered spectrogram segments.
+    Excludes segments with spikes of excluded types.
+    """
+    selected_spikes = spikes[spikes['spike_type'] == spike_type]
+    timestamps = selected_spikes['timestamp'].to_numpy()
+
+    segments = []
+    for ts in timestamps:
+        win_start, win_end = ts - window_size, ts + window_size
+        spikes_inside = spikes[
+            (spikes['timestamp'] >= win_start) &
+            (spikes['timestamp'] < win_end)
+        ].copy()
+
+        skip = False
+        for exclude_type in exclude_spike_types:
+            if np.any(spikes_inside['spike_type'] == exclude_type):
+                skip = True
+        if skip:
+            continue
+
+        spikes_inside['timestamp'] -= win_start
+        spectrogram_segment = spectrogram.cut_around(
+            trigger=ts,
+            window=(-window_size, window_size)
+        )
+
+        if spectrogram_segment is not None:
+            segments.append(
+                SpectrogramSpikesPair(
+                    trigger=ts,
+                    spectrogram=spectrogram_segment,
+                    spikes=spikes_inside,
+                    spike_counts={
+                        name: len(spikes_inside[spikes_inside['spike_type'] == name])
+                        for name in spikes['spike_type'].unique()
+                    }
+                )
+            )
+    print(f"Number of segments without {exclude_spike_types}: {len(segments)}")
+    return segments
+
 def segment_to_active_intervals(
     spectrogram: Spectrogram,
     spikes: DataFrame,
