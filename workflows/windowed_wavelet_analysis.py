@@ -115,7 +115,7 @@ def collect_spike_triggered_spectrograms(
         if skip:
             continue
 
-        spikes_inside['timestamp'] -= win_start
+        spikes_inside['timestamp'] -= ts
         spectrogram_segment = spectrogram.cut_around(
             trigger=ts,
             window=(-window_size, window_size)
