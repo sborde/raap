@@ -40,9 +40,7 @@ from perform_full_wavelet import (
 )
 
 from workflows.run_util.io import ResultPaths
-from workflows.spike_ac_analysis import (
-    save_figure,
-)
+
 
 class SignalExtractor(Protocol):
     """Protocol for callables that extracts signal from a recording"""
@@ -349,7 +347,7 @@ def save_spectrogram_figure(
     save_path = Path(path) / '02_figures'
     save_path.mkdir(parents=True, exist_ok=True)
     save_figure(
-        save_path,
+        str(save_path),
         fig,
         name,
         to_svg=False
@@ -553,3 +551,28 @@ def create_segment_power_matrix(
         y=segments[0].spectrogram.freqs,
         power=power_matrix.T
     )
+
+def save_figure(
+    path: str,
+    fig: Figure,
+    name: str,
+    *,
+    dpi: int = 300,
+    to_svg: bool = False
+):
+    """Save the given figure to the specified path in PNG and SVG formats."""
+    figure_path = Path(path)
+    figure_path.mkdir(parents=True, exist_ok=True)
+    figure_name = figure_path / name
+
+    fig.savefig(
+        f'{figure_name}.png',
+        format='png',
+        dpi=dpi,
+    )
+
+    if to_svg:
+        with plt.rc_context({'svg.fonttype': 'none'}):
+            fig.savefig(f'{figure_name}.svg', format='svg')
+
+    plt.close(fig)
