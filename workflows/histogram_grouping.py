@@ -124,9 +124,9 @@ class HistogramGroupingWorkflow:
         properties.
         """
         group_id, members = group
-        for episode_name in self._params.episodes:
-            episode_results = 
-            epis
+        # for episode_name in self._params.episodes:
+        #     episode_results = 
+        #     epis
             
 
 
