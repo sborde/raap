@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from matplotlib.axes import Axes
+
 from scipy.stats import wilcoxon
 from statsmodels.stats.multitest import multipletests
 
@@ -205,22 +207,12 @@ def plot_prob_change_per_group(
         sub_data = data[data['group'] == group_name].dropna(axis=0)
         color = palette[group_name]
         for fill_flag, feature in zip([-1, 1], ['p_raap', 'p_raap_if_burst']):
-            ax.boxplot(
-                sub_data[feature],
-                positions=[i + fill_flag * 0.1],
-                widths=0.15,
-                patch_artist=True,
-                boxprops={'facecolor': 'none', 'edgecolor': 'gray'},
-                medianprops={'color': 'black'},
-                whiskerprops={'color': 'black'},
-                capprops={'linewidth': 0}
-            )
-            ax.scatter(
-                [i + fill_flag * 0.1] * len(sub_data),
-                sub_data[feature],
-                marker='o',
-                edgecolors=color if fill_flag == 1 else None,
-                facecolors=color if fill_flag == -1 else 'none',
+            _plot_box_strip_at_position(
+                sub_data[feature].to_numpy(),
+                position=i + fill_flag * 0.1,
+                ax=ax,
+                color=color,
+                fill_markers=fill_flag == -1
             )
         for _, row in sub_data.iterrows():
             ax.plot(
@@ -255,22 +247,16 @@ def plot_enrichment_ratio_per_group(
     for i, group_name in enumerate(group_names):
         sub_data = data[data['group'] == group_name].dropna(axis=0)
         color = palette[group_name]
-        ax.boxplot(
-            sub_data[feature_name],
-            positions=[i],
-            widths=0.15,
-            patch_artist=True,
-            boxprops={'facecolor': 'none', 'edgecolor': 'gray'},
-            medianprops={'color': 'black'},
-            whiskerprops={'color': 'black'},
-            capprops={'linewidth': 0}
+        _plot_empty_box(
+            sub_data[feature_name].to_numpy(),
+            position=i,
+            ax=ax
         )
-        ax.scatter(
-            [i] * len(sub_data),
-            sub_data[feature_name],
-            marker='o',
-            edgecolors=color,
-            facecolors=color,
+        _plot_points_vertical(
+            sub_data[feature_name].to_numpy(),
+            position=i,
+            ax=ax,
+            color=color
         )
     ax.set_xticks(
         ticks=list(range(len(group_names))),
@@ -294,31 +280,22 @@ def plot_neighborhood_count_per_group(
 ):
     """Plots the neighborhood count per group with a box and scatter plot."""
     fig, ax = plt.subplots(1, 1, figsize=(15, 5))
+    feature_pair = ('neighbor_count', 'RA-AP_neighbor_count')
     for i, group_name in enumerate(group_names):
         sub_data = data[data['group'] == group_name].dropna(axis=0)
         color = palette[group_name]
-        for fill_flag, feature in zip([-1, 1], ['p_raap', 'p_raap_if_burst']):
-            ax.boxplot(
-                sub_data[feature],
-                positions=[i + fill_flag * 0.1],
-                widths=0.15,
-                patch_artist=True,
-                boxprops={'facecolor': 'none', 'edgecolor': 'gray'},
-                medianprops={'color': 'black'},
-                whiskerprops={'color': 'black'},
-                capprops={'linewidth': 0}
-            )
-            ax.scatter(
-                [i + fill_flag * 0.1] * len(sub_data),
-                sub_data[feature],
-                marker='o',
-                edgecolors=color if fill_flag == 1 else None,
-                facecolors=color if fill_flag == -1 else 'none',
+        for fill_flag, feature in zip([-1, 1], feature_pair):
+            _plot_box_strip_at_position(
+                sub_data[feature].to_numpy(),
+                position=i + fill_flag * 0.1,
+                ax=ax,
+                color=color,
+                fill_markers=fill_flag == -1
             )
         for _, row in sub_data.iterrows():
             ax.plot(
                 [i - 0.1, i + 0.1],
-                [row['p_raap'], row['p_raap_if_burst']],
+                [row[feature_pair[0]], row[feature_pair[1]]],
                 color='gray',
                 linewidth=0.5
             )
@@ -326,15 +303,65 @@ def plot_neighborhood_count_per_group(
         ticks=list(range(len(group_names))),
         labels=group_names
     )
-    ax.set_title('P(RA-AP) (filled) vs P(RA-AP|Burst) (empty) - per group')
+    ax.set_title(
+        f'{feature_pair[0]} vs {feature_pair[1]} - per group'
+    )
     Path(save_path).mkdir(parents=True, exist_ok=True)
     save_figure(
         Path(save_path),
         fig,
-        'neighborhood_count_per_group_boxplot',
+        f'{feature_pair[0]}_vs_{feature_pair[1]}_per_group_boxplot',
         to_svg=True
     )
     plt.close()
+
+def _plot_box_strip_at_position(
+    values: np.ndarray,
+    position: float,
+    ax: Axes,
+    color: str,
+    fill_markers: bool = True,
+    width: float = 0.15
+):
+    """Plots a box and strip plot at the specified position."""
+    _plot_empty_box(values, position, ax, width)
+    _plot_points_vertical(values, position, ax, color, fill=fill_markers)
+
+def _plot_empty_box(
+    values: np.ndarray,
+    position: float,
+    ax: Axes,
+    width: float = 0.15
+):
+    """Draws an unfilled boxplot for the given values at the specified position."""
+    ax.boxplot(
+        values,
+        positions=[position],
+        widths=width,
+        patch_artist=True,
+        boxprops={'facecolor': 'none', 'edgecolor': 'gray'},
+        medianprops={'color': 'gray'},
+        whiskerprops={'color': 'gray'},
+        capprops={'linewidth': 0}
+    )
+
+def _plot_points_vertical(
+    values: np.ndarray,
+    position: float,
+    ax: Axes,
+    color: str,
+    marker: str = 'o',
+    fill: bool = True,
+):
+    """Plots points vertically at the specified position."""
+    ax.scatter(
+        [position] * len(values),
+        values,
+        marker=marker,
+        edgecolors=color if not fill else None,
+        facecolors=color if fill else 'none',
+        color=color
+    )
 
 def test_enrichment_ratio(
     data: pd.DataFrame,
