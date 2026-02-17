@@ -56,26 +56,50 @@ def describe_bursting(
     n_spikes = len(spikes)
     n_bursting_spikes = len(bursting_spikes)
 
+    n_aisap = int(np.sum(spikes['spike_type'] == 'AIS-AP'))
+    n_undef = int(np.sum(spikes['spike_type'] == 'UNKNOWN'))
     n_raap = int(np.sum(spikes['spike_type'] == 'RA-AP'))
+
     n_raap_in_bursts = int(np.sum(bursting_spikes['spike_type'] == 'RA-AP'))
+    n_aisap_in_bursts = int(np.sum(bursting_spikes['spike_type'] == 'AIS-AP'))
+    n_undef_in_bursts = int(np.sum(bursting_spikes['spike_type'] == 'UNKNOWN'))
     p_bursting = n_bursting_spikes / n_spikes
+    p_aisap = n_aisap / n_spikes
+    p_undef = n_undef / n_spikes
     p_raap = n_raap / n_spikes
+
+    p_aisap_and_burst = n_aisap_in_bursts / n_spikes
+    p_undef_and_burst = n_undef_in_bursts / n_spikes
     p_raap_and_burst = n_raap_in_bursts / n_spikes
+
+    p_aisap_if_burst = p_aisap_and_burst / p_bursting if p_bursting > 0 else np.nan
+    p_undef_if_burst = p_undef_and_burst / p_bursting if p_bursting > 0 else np.nan
     p_raap_if_burst = p_raap_and_burst / p_bursting if p_bursting > 0 else np.nan
+
     enrichment_ratio = p_raap_if_burst / p_raap if p_raap > 0 else np.nan
     log_enrichment = np.log2(enrichment_ratio) if enrichment_ratio > 0 else np.nan
 
     return {
         'n_spikes': n_spikes,
         'n_bursting_spikes': n_bursting_spikes,
+        'n_aisap': n_aisap,
+        'n_undef': n_undef,
         'n_raap': n_raap,
+        'n_aisap_in_burst': n_aisap_in_bursts,
+        'n_undef_in_burst': n_undef_in_bursts,
         'n_raap_and_burst': n_raap_in_bursts,
         'p_bursting_spikes': p_bursting,
+        'p_aisap': p_aisap,
+        'p_undef': p_undef,
         'p_raap': p_raap,
+        'p_aisap_and_burst': p_aisap_and_burst,
+        'p_undef_and_burst': p_undef_and_burst,
         'p_raap_and_burst': p_raap_and_burst,
+        'p_aisap_if_burst': p_aisap_if_burst,
+        'p_undef_if_burst': p_undef_if_burst,
         'p_raap_if_burst': p_raap_if_burst,
-        'enrichment_ratio': enrichment_ratio,
-        'log_enrichment': log_enrichment
+        'raap_enrichment_ratio': enrichment_ratio,
+        'log_raap_enrichment': log_enrichment
     }
 
 def analyze_local_density(
@@ -134,6 +158,9 @@ def count_neighboring_spikes(
         ]
         stats.append({
             f'{prefix}neighbor_count': len(neighbor_spikes),
+            f'{prefix}neighbor_count_AIS-AP': np.sum(neighbor_spikes['spike_type'] == 'AIS-AP'),
+            f'{prefix}neighbor_count_UNKNOWN': np.sum(neighbor_spikes['spike_type'] == 'UNKNOWN'),
+            f'{prefix}neighbor_count_RA-AP': np.sum(neighbor_spikes['spike_type'] == 'RA-AP'),
         })
     return pd.DataFrame(stats)
 
@@ -204,7 +231,7 @@ def plot_prob_change_per_group(
     """Plots the probability change per group with a box and scatter plot."""
     fig, ax = plt.subplots(1, 1, figsize=(15, 5))
     for i, group_name in enumerate(group_names):
-        sub_data = data[data['group'] == group_name].dropna(axis=0)
+        sub_data = data[data['group'] == group_name]
         color = palette[group_name]
         for fill_flag, feature in zip([-1, 1], ['p_raap', 'p_raap_if_burst']):
             _plot_box_strip_at_position(
@@ -235,17 +262,61 @@ def plot_prob_change_per_group(
     )
     plt.close()
 
-def plot_enrichment_ratio_per_group(
+def plot_spiketype_prob_diff_per_group(
+    data: pd.DataFrame,
+    group_names: list[str],
+    palette: dict[str, dict[str, str]],
+    save_path: str
+):
+    """Plots the probability change per group with a box and scatter plot."""
+    fig, ax = plt.subplots(1, 1, figsize=(15, 5))
+    for i, group_name in enumerate(group_names):
+        sub_data = data[data['group'] == group_name]
+        group_color = palette['cell_type'][group_name]
+        raap_color = palette['spike_type']['RA-AP']
+        for j, (color, feature) in enumerate(zip(
+            [group_color, raap_color],
+            ['p_aisap_if_burst', 'p_raap_if_burst']
+        )):
+            _plot_box_strip_at_position(
+                sub_data[feature].to_numpy(),
+                position=i + (- 0.1 + j * 0.2),
+                ax=ax,
+                color=color,
+            )
+        for _, row in sub_data.iterrows():
+            ax.plot(
+                [i - 0.1, i + 0.1],
+                [row['p_aisap_if_burst'], row['p_raap_if_burst']],
+                color='gray',
+                linewidth=0.5
+            )
+    ax.set_xticks(
+        ticks=list(range(len(group_names))),
+        labels=group_names
+    )
+    ax.set_title('P(AISAP|Burst) vs P(RA-AP|Burst) - per group')
+    Path(save_path).mkdir(parents=True, exist_ok=True)
+    save_figure(
+        Path(save_path),
+        fig,
+        'aisap_if_burst_vs_raap_if_burst_per_group_boxplot',
+        to_svg=True
+    )
+    plt.close()
+
+def plot_box_and_strip_per_group(
     data: pd.DataFrame,
     group_names: list[str],
     palette: dict[str, str],
     feature_name: str,
-    save_path: str
+    save_path: str,
+    plot_title: str = '',
 ):
-    """Plots the enrichment ratio per group with a box and scatter plot."""
+    """Plots the bursting probability per group with a box and scatter plot."""
     fig, ax = plt.subplots(1, 1, figsize=(15, 5))
     for i, group_name in enumerate(group_names):
-        sub_data = data[data['group'] == group_name].dropna(axis=0)
+        sub_data = data[data['group'] == group_name]
         color = palette[group_name]
         _plot_empty_box(
             sub_data[feature_name].to_numpy(),
@@ -262,7 +333,9 @@ def plot_enrichment_ratio_per_group(
         ticks=list(range(len(group_names))),
         labels=group_names
     )
-    ax.set_title(f'{feature_name.capitalize()} Ratio of RA-AP in bursts - per group')
+    if not plot_title:
+        plot_title = feature_name.capitalize()
+    ax.set_title(f'{plot_title} - per group')
     Path(save_path).mkdir(parents=True, exist_ok=True)
     save_figure(
         Path(save_path),
@@ -271,6 +344,7 @@ def plot_enrichment_ratio_per_group(
         to_svg=True
     )
     plt.close()
+
 
 def plot_neighborhood_count_per_group(
     data: pd.DataFrame,
