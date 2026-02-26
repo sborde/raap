@@ -266,7 +266,8 @@ def plot_spiketype_prob_diff_per_group(
     data: pd.DataFrame,
     group_names: list[str],
     palette: dict[str, dict[str, str]],
-    save_path: str
+    save_path: str,
+    suffix: str = ''
 ):
     """Plots the probability change per group with a box and scatter plot."""
     fig, ax = plt.subplots(1, 1, figsize=(15, 5))
@@ -300,7 +301,7 @@ def plot_spiketype_prob_diff_per_group(
     save_figure(
         Path(save_path),
         fig,
-        'aisap_if_burst_vs_raap_if_burst_per_group_boxplot',
+        f'aisap_if_burst_vs_raap_if_burst_per_group_boxplot{suffix}',
         to_svg=True
     )
     plt.close()
@@ -408,11 +409,13 @@ def _plot_empty_box(
     width: float = 0.15
 ):
     """Draws an unfilled boxplot for the given values at the specified position."""
+    is_non_nan = ~np.isnan(values)
     ax.boxplot(
-        values,
+        values[is_non_nan],
         positions=[position],
         widths=width,
         patch_artist=True,
+        flierprops={'markersize': 0},
         boxprops={'facecolor': 'none', 'edgecolor': 'gray'},
         medianprops={'color': 'gray'},
         whiskerprops={'color': 'gray'},
