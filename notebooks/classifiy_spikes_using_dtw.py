@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import sys
 from typing import Self
 
+import pandas as pd
+
 sys.path.append('..')
 from pathlib import Path
 
@@ -46,6 +48,32 @@ def load_training_data(
         shapes.append(tuple(cell_shapes))
     return shapes
 
+def load_test_data(
+    cell: str,
+    raw_path: str,
+    label_path: str,
+    cut_params: dict,
+) -> list[SpikeShapes]:
+    labels = pd.read_csv(Path(label_path) / f'{cell}.csv')
+    shapes = []
+    recording = MatRecording(Path(raw_path) / f'{cell}.mat')
+    spike_shapes = extract_triggered_segments(
+        recording,
+        signal_name=cut_params['signal_name'],
+        event_name=cut_params['event_name'],
+        cut_window=cut_params['cut_window'],
+        fs=cut_params['fs']
+    )
+    shapes.append(
+        SpikeShapes(
+            spike_shapes.times * 1000,
+            spike_shapes.segments.values,
+            spike_shapes.timestamps,
+            spike_shapes.dt
+        )
+    )
+    return shapes
+
 @dataclass
 class ProcessedSpikeShape:
     """A dataclass to hold the processed spike shape and its label."""
@@ -60,7 +88,7 @@ class ProcessedSpikeShape:
         self,
         start_ratio: float = 0.0,
         end_ratio: float = 1.0,
-    ) -> Self:
+    ) -> 'ProcessedSpikeShape':
         """Extract the rising phase of the spike shape."""
         return get_rising_phase(self, start_ratio, end_ratio)
 
