@@ -89,9 +89,7 @@ def mean_shapes_rising(
         get_rising_phase(s, start_ratio, end_ratio, keep_size=True)
         for s in shapes
     ]
-    print(len(rising_shapes))
     mean_t = rising_shapes[0].times
-    print(np.stack([s.values for s in rising_shapes], axis=0))
     mean_v = np.nanmean(np.stack([s.values for s in rising_shapes], axis=0), axis=0)
     return MeanSpikeShape(
         mean_t,
