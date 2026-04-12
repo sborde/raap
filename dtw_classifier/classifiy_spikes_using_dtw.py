@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from typing import Self
 from pathlib import Path
 
+from dtw_classifier.dataclasses import (
+    MeanSpikeShape,
+    ProcessedSpikeShape
+)
+from dtw_classifier.transformers import get_rising_phase
+
 
 sys.path.append('..')
 
@@ -17,35 +23,6 @@ from scipy.signal import savgol_filter
 from signalizer.model.experiment.recordings import MatRecording
 from analyses.slowdown_descriptors import find_start_index
 from data.spikes import SpikeShape, SpikeShapes, extract_triggered_segments
-
-
-@dataclass
-class ProcessedSpikeShape:
-    """A dataclass to hold the processed spike shape and its label."""
-    times: np.ndarray
-    values: np.ndarray
-    timestamp: float
-    dt: float
-    peak_i: int
-    start_i: int
-
-    def get_rising(
-        self,
-        start_ratio: float = 0.0,
-        end_ratio: float = 1.0,
-    ) -> 'ProcessedSpikeShape':
-        """Extract the rising phase of the spike shape."""
-        return get_rising_phase(self, start_ratio, end_ratio)
-
-@dataclass
-class MeanSpikeShape:
-    """A dataclass to hold the mean spike shape for a class."""
-    times: np.ndarray
-    values: np.ndarray
-    dt: float
-    peak_i: int
-    start_i: int
-
 
 def load_training_data(
     cell_names: list[str],
@@ -173,32 +150,3 @@ def average_shapes(
         {'start_threshold': dv_threshold}
     )
     return MeanSpikeShape(t, v, dt, peak_i, start_i)
-
-def get_rising_phase(
-    shape: ProcessedSpikeShape,
-    start_ratio: float = 0.0,
-    end_ratio: float = 1.0,
-    keep_size: bool = False
-) -> ProcessedSpikeShape:
-    """Extract the rising phase of a spike shape."""
-    peak_i = shape.peak_i
-    start_i = shape.start_i
-    left_i = int(start_ratio * (peak_i - start_i) + start_i)
-    right_i = int(end_ratio * (peak_i - start_i) + start_i)
-
-    if keep_size:
-        new_v = np.nan * np.ones_like(shape.values)
-        new_v[left_i:right_i + 1] = shape.values[left_i:right_i + 1]
-        new_t = shape.times
-    else:
-        new_v = shape.values[left_i:right_i + 1]
-        new_t = shape.times[left_i:right_i + 1]
-
-    return ProcessedSpikeShape(
-        new_t,
-        new_v,
-        shape.timestamp,
-        shape.dt,
-        right_i - left_i,
-        0
-    )
