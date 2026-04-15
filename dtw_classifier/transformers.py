@@ -75,6 +75,32 @@ def resample_norm_phase_curve(
     new_dvdt = np.interp(new_v, phase_curve.v, phase_curve.dvdt)
     return PhaseCurve(new_v, new_dvdt)
 
+def normalize_first_deriv(
+    first_deriv: FirstDeriv
+) -> FirstDeriv:
+    """Normalize the range of the first derivative."""
+    return FirstDeriv(
+        normalize_v_range(first_deriv.times),
+        normalize_v_range(first_deriv.dv)
+    )
+
+def resample_first_deriv(
+    first_deriv: FirstDeriv,
+    n_points: int
+) -> FirstDeriv:
+    """Resample the first derivative to have a fixed number of points."""
+    new_times = np.linspace(
+        first_deriv.times[0],
+        first_deriv.times[-1],
+        n_points
+    )
+    new_dv = np.interp(
+        new_times,
+        first_deriv.times,
+        first_deriv.dv
+    )
+    return FirstDeriv(new_times, new_dv)
+
 def normalize_v_range(
     v: np.ndarray,
 ) -> np.ndarray:
