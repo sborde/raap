@@ -6,7 +6,8 @@ import numpy as np
 from dtw_classifier.dataclasses import (
     FirstDeriv,
     ProcessedSpikeShape,
-    PhaseCurve
+    PhaseCurve,
+    SecondDeriv
 )
 
 
@@ -44,9 +45,15 @@ def first_derivative(
 ) -> FirstDeriv:
     """Calculate the first derivative of a spike shape."""
     dv = np.diff(shape.values)
-    return FirstDeriv(
-        shape.times[:-1],
-        dv
+    return FirstDeriv(shape.times[:-1], dv)
+
+def second_derivative(
+    shape: ProcessedSpikeShape
+) -> SecondDeriv:
+    """Calculate the second derivative of a spike shape."""
+    return SecondDeriv(
+        shape.times[:-2],
+        np.diff(shape.values, n=2)
     )
 
 def phase_curve(
@@ -82,6 +89,39 @@ def normalize_first_deriv(
     return FirstDeriv(
         normalize_v_range(first_deriv.times),
         normalize_v_range(first_deriv.dv)
+    )
+
+def normalize_second_deriv(
+    second_deriv: SecondDeriv
+) -> SecondDeriv:
+    """Normalize the range of the second derivative."""
+    return SecondDeriv(
+        normalize_v_range(second_deriv.times),
+        normalize_v_range(second_deriv.ddv)
+    )
+
+def resample_spike_shape(
+    shape: ProcessedSpikeShape,
+    n_points: int
+) -> ProcessedSpikeShape:
+    """Resample a spike shape to have a fixed number of points."""
+    new_times = np.linspace(
+        shape.times[0],
+        shape.times[-1],
+        n_points
+    )
+    new_values = np.interp(
+        new_times,
+        shape.times,
+        shape.values
+    )
+    return ProcessedSpikeShape(
+        np.linspace(0, 1, n_points),
+        new_values,
+        shape.timestamp,
+        1 / n_points,
+        shape.peak_i,
+        shape.start_i
     )
 
 def resample_first_deriv(

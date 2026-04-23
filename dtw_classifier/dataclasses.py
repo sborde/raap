@@ -15,11 +15,46 @@ class ProcessedSpikeShape:
     peak_i: int
     start_i: int
 
+    @property
+    def x(self) -> np.ndarray:
+        """Return the times as the x values for plotting."""
+        return self.times
+    @property
+    def y(self) -> np.ndarray:
+        """Return the values as the y values for plotting."""
+        return self.values
+
 @dataclass
 class FirstDeriv:
     """A dataclass to hold the first derivative of a spike shape."""
     times: np.ndarray
     dv: np.ndarray
+
+    @property
+    def x(self) -> np.ndarray:
+        """Return the times as the x values for plotting."""
+        return self.times
+    @property
+    def y(self) -> np.ndarray:
+        """Return the first derivative values as the y values for plotting."""
+        return self.dv
+
+@dataclass
+class SecondDeriv:
+    """A dataclass to hold the second derivative of a spike shape."""
+    times: np.ndarray
+    ddv: np.ndarray
+
+    @property
+    def x(self) -> np.ndarray:
+        """Return the times as the x values for plotting."""
+        return self.times
+
+    @property
+    def y(self) -> np.ndarray:
+        """Return the second derivative values as the y values for plotting."""
+        return self.ddv
+
 
 @dataclass
 class PhaseCurve:
