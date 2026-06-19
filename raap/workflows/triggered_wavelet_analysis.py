@@ -19,7 +19,7 @@ from common.data_utils import CellWrapper
 from param_classes.workflows.wavelet_analysis import SpikeTriggeredWaveletWorkflowParams
 
 from notebook_utils.recording_wavelet import plot_spectrogram
-from perform_full_wavelet import calculate_spectrogram, Spectrogram
+from raap.workflows.perform_full_wavelet import calculate_spectrogram, Spectrogram
 
 from workflows.run_util.io import ResultPaths
 from workflows.spike_ac_analysis import (

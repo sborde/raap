@@ -31,7 +31,7 @@ from param_classes.workflows.wavelet_analysis import (
 )
 
 from notebook_utils.recording_wavelet import plot_spectrogram
-from perform_full_wavelet import (
+from raap.workflows.perform_full_wavelet import (
     calculate_spectrogram,
     Spectrogram,
     WaveletCalculator,

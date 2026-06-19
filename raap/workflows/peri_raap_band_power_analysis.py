@@ -7,7 +7,7 @@ from analyses.model import RecordingWithSpikes
 
 from common.data_utils import CellWrapper
 from param_classes.workflows.wavelet_analysis import WindowedWaveletAnalysisParams
-from perform_full_wavelet import Spectrogram
+from raap.workflows.perform_full_wavelet import Spectrogram
 from workflows.run_util.io import ResultPaths
 from workflows.windowed_wavelet_analysis import (
     create_recording_wavelet_calculator,

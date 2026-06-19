@@ -8,7 +8,7 @@ from matplotlib.figure import Figure
 from signalizer.model.experiment.signals import Signal
 from signalizer.model.experiment.recordings import MatRecording
 
-from perform_full_wavelet import calculate_tfd_power, Spectrogram
+from raap.workflows.perform_full_wavelet import calculate_tfd_power, Spectrogram
 
 
 
