@@ -3,3 +3,4 @@
 hdf5storage
 startup.bat
 config/run_spike_type_sleep_episode_prob_analysis.yaml
+*.egg-info
